@@ -11,6 +11,8 @@ const About = () => import('./components/AboutPanel.vue')
 const AuthCallback = () => import('./components/AuthCallback.vue')
 const HomePage = () => import('./components/home/HomePage.vue')
 const Workbench = () => import('./components/workbench/Workbench.vue')
+const History = () => import('./components/workbench/History.vue')
+const Archive = () => import('./components/workbench/Archive.vue')
 // const ListPanel = () => import('./components/list/ListPanel.vue')
 // const CustomPanel = () => import('./components/CustomPanel.vue')
 // const VoiceSearchPanel = () =>
@@ -29,6 +31,14 @@ const router = createRouter({
     {
       path: '/browse',
       component: HomePage,
+    },
+    {
+      path: '/history',
+      component: History,
+    },
+    {
+      path: '/archive',
+      component: Archive,
     },
     {
       path: '/translate',

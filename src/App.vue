@@ -48,6 +48,10 @@ watch(locale, (newVal) => {
             <!-- 工作台/剧情浏览/关于用干净路径，不拖带编辑器的 source/issue/role/hash -->
             <router-link :to="{ path: '/' }">工作台</router-link>
             |
+            <router-link :to="{ path: '/history' }">已完成</router-link>
+            |
+            <router-link :to="{ path: '/archive' }">存档</router-link>
+            |
             <router-link
               :to="{ path: '/translate', query: route.query, hash: route.hash }"
               >{{ t('tab.Translate') }}</router-link

@@ -41,6 +41,14 @@
                   AI机翻CSV
                 </n-button>
                 <n-button
+                  size="tiny"
+                  type="warning"
+                  :loading="busy === d.number"
+                  @click="archive(d)"
+                >
+                  存档
+                </n-button>
+                <n-button
                   v-if="d.tr.state === '待认领'"
                   size="tiny"
                   type="info"
@@ -134,6 +142,8 @@ import {
   WORK_OWNER,
   WORK_REPO,
   docFromIssue,
+  archiveIssue,
+  isArchivedIssue,
   applyTrack,
   editorUrlForPath,
   workRawUrl,
@@ -185,7 +195,7 @@ async function refresh() {
   try {
     const issues = await store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO)
     docs.value = (issues as any[])
-      .filter((i) => !i.pull_request)
+      .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
       .sort((a, b) => a.title.localeCompare(b.title))
     const closed = await store.octokitWrapper.listIssues(
@@ -194,13 +204,26 @@ async function refresh() {
       { state: 'closed' }
     )
     completed.value = (closed as any[])
-      .filter((i) => !i.pull_request)
+      .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
       .sort((a, b) => a.title.localeCompare(b.title))
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}（确认工作仓库存在且有权限）`
   }
   loading.value = false
+}
+
+async function archive(d: DocTask) {
+  if (!store.octokitWrapper) return
+  if (!confirm(`存档 ${d.title}？`)) return
+  busy.value = d.number
+  try {
+    await archiveIssue(store.octokitWrapper, d.number)
+    await refresh()
+  } catch (e: any) {
+    alert(`存档失败：${e?.message || e}`)
+  }
+  busy.value = null
 }
 
 async function downloadCsvPath(path: string, title: string, label: string) {

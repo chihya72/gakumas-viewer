@@ -16,6 +16,7 @@ export const WORK_BRANCH = import.meta.env.VITE_WORK_BRANCH || 'main'
 
 export const STATES = ['待认领', '进行中', '完成'] as const
 export type TrackState = (typeof STATES)[number]
+export const ARCHIVED_LABEL = '已存档'
 
 export type TrackKey = 'tr' | 'pr'
 export const TRACK_LABEL: Record<TrackKey, string> = { tr: '翻译', pr: '校对' }
@@ -327,6 +328,32 @@ export function docFromIssue(i: any): DocTask {
     tr: parseTrack(i.body, 'tr'),
     pr: parseTrack(i.body, 'pr'),
   }
+}
+
+export function issueLabelNames(i: any): string[] {
+  return (i.labels || []).map((l: any) => (typeof l === 'string' ? l : l.name))
+}
+
+export function isArchivedIssue(i: any): boolean {
+  return issueLabelNames(i).includes(ARCHIVED_LABEL)
+}
+
+export async function archiveIssue(wrapper: any, issueNumber: number) {
+  const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, issueNumber)
+  const labels = [...new Set([...issueLabelNames(issue), ARCHIVED_LABEL])]
+  await wrapper.updateIssue(WORK_OWNER, WORK_REPO, issueNumber, {
+    labels,
+    state: 'closed',
+  })
+}
+
+export async function restoreIssue(wrapper: any, issueNumber: number) {
+  const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, issueNumber)
+  const labels = issueLabelNames(issue).filter((l) => l !== ARCHIVED_LABEL)
+  await wrapper.updateIssue(WORK_OWNER, WORK_REPO, issueNumber, {
+    labels,
+    state: 'open',
+  })
 }
 
 // 统一的轨道更新：拉最新 body → 改指定轨 → 回写 body + 同步 assignees（两轨全完成则关 issue）
