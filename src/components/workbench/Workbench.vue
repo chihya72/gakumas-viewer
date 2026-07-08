@@ -3,7 +3,7 @@
 <template>
   <div class="workbench">
     <push-header title="汉化工作台" />
-    <div class="build-mark">构建标记 B14（若看不到此行=仍是旧缓存）</div>
+    <div class="build-mark">构建标记 B15（若看不到此行=仍是旧缓存）</div>
 
     <div v-if="!store.octokitWrapper?.userMeta" class="hint">
       请先登录 GitHub 账号（需已加入工作组，即对工作仓库有写权限）。
@@ -37,6 +37,9 @@
                 <n-tag size="small" :type="tagType(d.tr.state)" :bordered="false">
                   {{ trackLabel(d.tr) }}
                 </n-tag>
+                <n-button size="tiny" @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')">
+                  AI机翻CSV
+                </n-button>
                 <n-button
                   v-if="d.tr.state === '待认领'"
                   size="tiny"
@@ -65,6 +68,13 @@
                 >
                   {{ prCellLabel(d) }}
                 </n-tag>
+                <n-button
+                  size="tiny"
+                  :disabled="d.tr.state !== '完成'"
+                  @click="downloadCsvPath(d.translatedPath, d.title, '翻译')"
+                >
+                  翻译CSV
+                </n-button>
                 <n-button
                   v-if="d.pr.state === '待认领'"
                   size="tiny"
@@ -99,7 +109,9 @@
           <span class="stock-title">{{ d.title }}</span>
           <span class="stock-user">翻译：{{ displayUser(d.tr.user) }}</span>
           <span class="stock-user">校对：{{ displayUser(d.pr.user) }}</span>
-          <n-button size="tiny" @click="downloadCsv(d)">下载CSV</n-button>
+          <n-button size="tiny" @click="downloadCsvPath(d.proofreadPath, d.title, '校对')">
+            校对CSV
+          </n-button>
           <n-button size="tiny" @click="downloadChineseTxt(d)">
             纯中文TXT
           </n-button>
@@ -191,21 +203,20 @@ async function refresh() {
   loading.value = false
 }
 
-// 下载成品 CSV（工作仓库当前版本）
-async function downloadCsv(d: DocTask) {
-  const r = await fetch(workRawUrl(d.paths[0]))
+async function downloadCsvPath(path: string, title: string, label: string) {
+  const r = await fetch(workRawUrl(path))
   if (!r.ok) {
-    alert(`下载失败: ${r.status}`)
+    alert(`${label}CSV下载失败: ${r.status}`)
     return
   }
-  FileSaver.saveAs(await r.blob(), `${d.title}.csv`)
+  FileSaver.saveAs(await r.blob(), `${title}_${label}.csv`)
 }
 
 // 下载纯中文 TXT：原始 txt(campus 权威源) + 成品 CSV 在浏览器合并
 async function downloadChineseTxt(d: DocTask) {
   const [rawTxt, csvResp, dict] = await Promise.all([
     fetchRawTxt(d.title),
-    fetch(workRawUrl(d.paths[0])),
+    fetch(workRawUrl(d.proofreadPath)),
     fetchNameDict(),
   ])
   if (rawTxt === null) {
@@ -229,11 +240,19 @@ async function downloadChineseTxt(d: DocTask) {
 }
 
 function open(d: DocTask, role?: TrackKey) {
-  if (!d.paths.length) {
+  const path =
+    role === 'tr'
+      ? d.aiPath
+      : role === 'pr'
+      ? d.translatedPath
+      : d.tr.state === '完成'
+      ? d.translatedPath
+      : d.aiPath
+  if (!path) {
     alert('该剧情缺少文件路径标记')
     return
   }
-  router.push(editorUrlForPath(d.paths[0], d.number, role))
+  router.push(editorUrlForPath(path, d.number, role))
 }
 
 // 认领某轨：写 我:进行中（不自动跳转，认领后自己点"打开"）

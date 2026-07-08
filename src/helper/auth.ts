@@ -292,8 +292,6 @@ class OctokitWrapper {
     return data
   }
 
-  // 认领台账用：列出工作仓库的 open issues（≤100，翻译组规模足够）
-  // ponytail: 不分页，超过 100 篇待办再加分页
   async listIssues(
     owner: string,
     repo: string,
@@ -303,15 +301,20 @@ class OctokitWrapper {
       labels?: string
     } = {}
   ) {
-    const { data } = await this.request('GET /repos/{owner}/{repo}/issues', {
-      owner,
-      repo,
-      state: 'open',
-      per_page: 100,
-      ...params,
-      headers: this.headers,
-    })
-    return data
+    const out = []
+    for (let page = 1; ; page++) {
+      const { data } = await this.request('GET /repos/{owner}/{repo}/issues', {
+        owner,
+        repo,
+        state: 'open',
+        per_page: 100,
+        page,
+        ...params,
+        headers: this.headers,
+      })
+      out.push(...data)
+      if (data.length < 100) return out
+    }
   }
 
   async getIssue(owner: string, repo: string, issue_number: number) {

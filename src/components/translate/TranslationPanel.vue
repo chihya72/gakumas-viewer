@@ -44,6 +44,8 @@ import {
   myStatusOf,
   applyTrack,
   pushContentToSource,
+  pushContentToWorkPath,
+  completionPath,
   validateRowsHtmlTags,
   type MyStatus,
 } from '../../helper/workflow'
@@ -180,8 +182,11 @@ async function loadWorkStatus() {
   } catch {
     /* 未登录/无 issue 时静默 */
   } finally {
-    // 只读：校对被"翻译未完成"挡住，或该轨已完成（防误改已完成稿）
-    store.readOnly = workStatus.value.blocked || !!workStatus.value.finished
+    store.readOnly =
+      isWorkFile.value &&
+      (!workStatus.value.activeRole ||
+        workStatus.value.blocked ||
+        !!workStatus.value.finished)
     workStatusLoaded.value = true
   }
 }
@@ -193,7 +198,7 @@ const completeLabel = computed(() => {
   if (r) return `${TRACK_LABEL[r]}完成`
   if (workStatus.value.blocked) return '待翻译完成'
   if (workStatus.value.finished) return '已完成'
-  if (isWorkFile.value) return '保存'
+  if (isWorkFile.value) return '只读'
   return t('translate.tab.download')
 })
 function base64ToUtf8(b64: string): string {
@@ -238,9 +243,25 @@ async function onCompleteClick() {
     communication?.value?.downloadData()
     return
   }
+  if (!workStatus.value.activeRole) {
+    alert('未认领当前工序，不能提交')
+    return
+  }
   const ok = await pushCurrent(!!workStatus.value.activeRole)
   const role = workStatus.value.activeRole
-  if (role && ok && issueNumber.value && store.octokitWrapper) {
+  const content = store.base64content
+  if (role && ok && issueNumber.value && store.octokitWrapper && content) {
+    const { path } = parseGithubBlobUrl(store.sourceUrl)
+    const title = (store.csvFilename || path.split('/').pop() || '').replace(
+      /\.csv$/,
+      ''
+    )
+    await pushContentToWorkPath(
+      store.octokitWrapper,
+      completionPath(path, title, role),
+      content,
+      `${TRACK_LABEL[role]}完成 ${store.jsonUrl}`
+    )
     await applyTrack(store.octokitWrapper, issueNumber.value, role, {
       user: me.value,
       state: '完成',

@@ -5,7 +5,7 @@
 //   <!-- pr:<用户>:<状态> -->   校对轨
 // 状态 ∈ 待认领 / 进行中 / 完成。两轨互不依赖：待翻译时校对也能提前认领；
 // 一个人可两轨都接，也可两人分接。issue 的 assignees = 两轨认领人的并集（便于 GitHub 侧可见 + 我的任务过滤）。
-// 文件路径用 <!-- path: data/adv/story/NN.csv --> 标记（一篇多话则多条）。
+// 文件路径用阶段目录标记；旧 issue 的 <!-- path: data/... --> 仍可兼容。
 
 import { parseGithubBlobUrl } from './path'
 
@@ -28,6 +28,10 @@ export interface DocTask {
   number: number
   title: string
   paths: string[]
+  rawPath: string
+  aiPath: string
+  translatedPath: string
+  proofreadPath: string
   tr: Track
   pr: Track
 }
@@ -65,6 +69,38 @@ export function pathsFromBody(body: string | null | undefined): string[] {
   return out
 }
 
+function markerPath(body: string | null | undefined, key: string): string {
+  const m = (body || '').match(new RegExp(`<!--\\s*${key}:\\s*(.+?)\\s*-->`))
+  return m ? m[1].trim() : ''
+}
+
+function csvPathFromTitle(title: string, dir: string): string {
+  return `${dir}/${title.split('_').join('/')}.csv`
+}
+
+function stagePathFromAny(path: string, title: string, dir: string): string {
+  if (!path) return csvPathFromTitle(title, dir)
+  const parts = path.split('/')
+  if (['data', 'ai_csv', 'translated_csv', 'proofread_csv'].includes(parts[0])) {
+    return [dir, ...parts.slice(1)].join('/')
+  }
+  return csvPathFromTitle(title, dir)
+}
+
+export function stagePath(d: DocTask, stage: 'ai' | 'translated' | 'proofread') {
+  if (stage === 'ai') return d.aiPath
+  if (stage === 'translated') return d.translatedPath
+  return d.proofreadPath
+}
+
+export function completionPath(sourcePath: string, title: string, role: TrackKey) {
+  return stagePathFromAny(
+    sourcePath,
+    title,
+    role === 'tr' ? 'translated_csv' : 'proofread_csv'
+  )
+}
+
 // 两轨认领人并集（去空、去重）
 export function assigneesOf(tr: Track, pr: Track): string[] {
   return [...new Set([tr.user, pr.user].filter(Boolean))]
@@ -93,6 +129,15 @@ export async function pushContentToSource(
   return wrapper.updateContent(owner, repo, branch, path, message, base64)
 }
 
+export async function pushContentToWorkPath(
+  wrapper: any,
+  path: string,
+  base64: string,
+  message: string
+) {
+  return wrapper.updateContent(WORK_OWNER, WORK_REPO, WORK_BRANCH, path, message, base64)
+}
+
 // ===== 网页端产物下载：成品 CSV / 纯中文 txt =====
 
 // 预翻译仓库(=Gakumas-Auto-Translate)的 owner/repo/branch，人名字典在其根目录
@@ -117,7 +162,11 @@ export function campusRawUrl(flatTxtName: string): string {
 // 取原始 txt：campus 权威源优先，工作仓库 raw/ 兜底
 export async function fetchRawTxt(title: string): Promise<string | null> {
   const name = `${title}.txt`
-  for (const url of [campusRawUrl(name), workRawUrl(`raw/${name}`)]) {
+  for (const url of [
+    workRawUrl(`raw_txt/${name}`),
+    campusRawUrl(name),
+    workRawUrl(`raw/${name}`),
+  ]) {
     try {
       const r = await fetch(url)
       if (r.ok) return await r.text()
@@ -147,7 +196,9 @@ export function validateRowsHtmlTags(
     const src = htmlTags(row.text)
     const dst = htmlTags(row.trans)
     if (src.join('\u0000') !== dst.join('\u0000')) {
-      errors.push(`第 ${i + 2} 行标签不一致`)
+      errors.push(
+        `第 ${i + 2} 行标签不一致：原文[${src.join(' ')}] 译文[${dst.join(' ')}]`
+      )
     }
   })
   return errors
@@ -258,10 +309,21 @@ export function myStatusOf(
 }
 
 export function docFromIssue(i: any): DocTask {
+  const paths = pathsFromBody(i.body)
+  const legacy = paths[0] || ''
   return {
     number: i.number,
     title: i.title,
-    paths: pathsFromBody(i.body),
+    paths,
+    rawPath: markerPath(i.body, 'raw_path') || `raw_txt/${i.title}.txt`,
+    aiPath:
+      markerPath(i.body, 'ai_path') || stagePathFromAny(legacy, i.title, 'ai_csv'),
+    translatedPath:
+      markerPath(i.body, 'translated_path') ||
+      stagePathFromAny(legacy, i.title, 'translated_csv'),
+    proofreadPath:
+      markerPath(i.body, 'proofread_path') ||
+      stagePathFromAny(legacy, i.title, 'proofread_csv'),
     tr: parseTrack(i.body, 'tr'),
     pr: parseTrack(i.body, 'pr'),
   }
