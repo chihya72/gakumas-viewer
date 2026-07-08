@@ -35,6 +35,20 @@ export interface DocTask {
   proofreadPath: string
   tr: Track
   pr: Track
+  updatedAt: string // issue 最后更新时间(ISO)，作"最后上传时间"展示
+}
+
+// GMT+8 显示，如 07-08 23:45
+export function formatGmt8(iso: string): string {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 function markerRe(key: TrackKey) {
@@ -326,12 +340,13 @@ export function myStatusOf(
   if (!me) return none
   const asTr = (): MyStatus => {
     if (tr.user !== me) return none
-    if (tr.state === '完成') return done
+    // 本人已完成的轨：从工作台/历史页显式带 role 进来时允许重新修改（再次完成会覆盖阶段目录）
+    if (tr.state === '完成' && role !== 'tr') return done
     return { activeRole: 'tr', blocked: false, blockMsg: '' }
   }
   const asPr = (): MyStatus => {
     if (pr.user !== me) return none
-    if (pr.state === '完成') return done
+    if (pr.state === '完成' && role !== 'pr') return done
     if (tr.state === '完成')
       return { activeRole: 'pr', blocked: false, blockMsg: '' }
     // 认领了校对但翻译未完成 → 只读
@@ -370,6 +385,7 @@ export function docFromIssue(i: any): DocTask {
       stagePathFromAny(legacy, i.title, 'proofread_csv'),
     tr: parseTrack(i.body, 'tr'),
     pr: parseTrack(i.body, 'pr'),
+    updatedAt: i.updated_at || '',
   }
 }
 

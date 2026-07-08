@@ -3,7 +3,7 @@
 <template>
   <div class="workbench">
     <push-header title="汉化工作台" />
-    <div class="build-mark">构建标记 B16（若看不到此行=仍是旧缓存）</div>
+    <div class="build-mark">构建标记 B17（若看不到此行=仍是旧缓存）</div>
 
     <div v-if="!store.octokitWrapper?.userMeta" class="hint">
       请先登录 GitHub 账号（需已加入工作组，即对工作仓库有写权限）。
@@ -27,6 +27,7 @@
             <th>剧情</th>
             <th>翻译</th>
             <th>校对</th>
+            <th>最后更新(GMT+8)</th>
           </tr>
         </thead>
         <tbody>
@@ -71,9 +72,17 @@
                 <n-button
                   v-else-if="d.tr.user === me && d.tr.state !== '完成'"
                   size="tiny"
+                  type="primary"
                   @click="open(d, 'tr')"
                 >
-                  打开
+                  开始在线翻译
+                </n-button>
+                <n-button
+                  v-else-if="d.tr.user === me && d.tr.state === '完成'"
+                  size="tiny"
+                  @click="open(d, 'tr')"
+                >
+                  重新修改
                 </n-button>
               </div>
             </td>
@@ -112,12 +121,14 @@
                     d.pr.state !== '完成'
                   "
                   size="tiny"
+                  type="primary"
                   @click="open(d, 'pr')"
                 >
-                  打开
+                  开始在线校对
                 </n-button>
               </div>
             </td>
+            <td class="time">{{ formatGmt8(d.updatedAt) }}</td>
           </tr>
         </tbody>
       </table>
@@ -138,6 +149,7 @@ import {
   WORK_OWNER,
   WORK_REPO,
   docFromIssue,
+  formatGmt8,
   archiveIssue,
   isArchivedIssue,
   applyTrack,

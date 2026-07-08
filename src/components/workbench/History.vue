@@ -16,10 +16,26 @@
         <span class="title">{{ d.title }}</span>
         <span class="user">翻译：{{ displayUser(d.tr.user) }}</span>
         <span class="user">校对：{{ displayUser(d.pr.user) }}</span>
+        <span class="user">{{ formatGmt8(d.updatedAt) }}</span>
         <n-button size="tiny" @click="downloadCsv(d)">校对CSV</n-button>
         <n-button size="tiny" @click="downloadChineseTxt(d)"
           >纯中文TXT</n-button
         >
+        <!-- 本人可对已完成稿重新修改（再次完成会覆盖阶段目录） -->
+        <n-button
+          v-if="me && d.tr.user === me"
+          size="tiny"
+          @click="openEditor(d, 'tr')"
+        >
+          重新修改翻译
+        </n-button>
+        <n-button
+          v-if="me && d.pr.user === me"
+          size="tiny"
+          @click="openEditor(d, 'pr')"
+        >
+          重新修改校对
+        </n-button>
       </div>
       <n-empty v-if="!loading && !rows.length" description="暂无已完成文件" />
     </template>
@@ -27,7 +43,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { NButton, NTag, NEmpty, NAlert } from 'naive-ui'
 import FileSaver from 'file-saver'
 import PushHeader from '../translate/push/PushHeader.vue'
@@ -39,16 +56,30 @@ import {
   WORK_REPO,
   buildChineseTxt,
   docFromIssue,
+  editorUrlForPath,
   fetchNameDict,
   fetchRawTxt,
+  formatGmt8,
   isArchivedIssue,
   workRawUrl,
   type DocTask,
+  type TrackKey,
 } from '../../helper/workflow'
 
+const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 const rows = ref<DocTask[]>([])
+const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
+
+// 重新修改：打开工作文件编辑器（再次完成会覆盖对应阶段目录快照）
+function openEditor(d: DocTask, role: TrackKey) {
+  if (!d.paths.length) {
+    alert('该文件缺少路径标记')
+    return
+  }
+  router.push(editorUrlForPath(d.paths[0], d.number, role))
+}
 
 async function refresh() {
   if (!store.octokitWrapper) return
