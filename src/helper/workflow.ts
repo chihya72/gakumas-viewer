@@ -35,7 +35,74 @@ export interface DocTask {
   proofreadPath: string
   tr: Track
   pr: Track
-  updatedAt: string // issue 最后更新时间(ISO)，作"最后上传时间"展示
+  updatedAt: string // issue 最后更新时间(ISO)
+  trCsvTime?: string // translated_csv 最后 commit 时间（页面异步填充）
+  prCsvTime?: string // proofread_csv 最后 commit 时间（页面异步填充）
+}
+
+// 某文件在工作仓库的最后 commit 时间（ISO）；文件不存在返回 ''
+export async function fileCommitTime(
+  wrapper: any,
+  path: string
+): Promise<string> {
+  try {
+    const { data } = await wrapper.request(
+      'GET /repos/{owner}/{repo}/commits',
+      {
+        owner: WORK_OWNER,
+        repo: WORK_REPO,
+        path,
+        per_page: 1,
+        headers: { 'X-GitHub-Api-Version': '2022-11-28' },
+      }
+    )
+    return data?.[0]?.commit?.committer?.date || ''
+  } catch {
+    return ''
+  }
+}
+
+// 一键完成翻译（无人接翻译、直接采用 AI 机翻稿）：
+// 1) 把 ai_csv 内容原样复制为 translated_csv 快照
+// 2) 翻译轨置 完成，译者=机翻 CSV 里"译者"行的 AI 名
+// 只改 issue body，不动 assignees（AI 名不是 GitHub 用户，不能 assign）
+export async function aiCompleteTranslation(
+  wrapper: any,
+  doc: { number: number; aiPath: string; translatedPath: string }
+): Promise<void> {
+  const src = await wrapper.getContent(
+    WORK_OWNER,
+    WORK_REPO,
+    WORK_BRANCH,
+    doc.aiPath,
+    true
+  )
+  const b64 = (src.content as string).replace(/\n/g, '')
+  // 从 CSV 里解析"译者"行的 AI 名
+  let aiName = 'AI'
+  try {
+    const text = new TextDecoder().decode(
+      Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    )
+    const m = text.match(/^译者,([^,\r\n]+)/m)
+    if (m && m[1]) aiName = m[1].trim()
+  } catch {
+    /* 解析失败用默认名 */
+  }
+  await wrapper.updateContent(
+    WORK_OWNER,
+    WORK_REPO,
+    WORK_BRANCH,
+    doc.translatedPath,
+    `一键完成翻译(AI) ${doc.translatedPath}`,
+    b64
+  )
+  const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, doc.number)
+  const body = setTrackInBody(issue.body, 'tr', {
+    user: aiName,
+    state: '完成',
+  })
+  await wrapper.updateIssue(WORK_OWNER, WORK_REPO, doc.number, { body })
 }
 
 // GMT+8 显示，如 07-08 23:45
@@ -339,9 +406,13 @@ export function myStatusOf(
   }
   if (!me) return none
   const asTr = (): MyStatus => {
+    // 重新翻译常开：翻译轨已完成时，任何登录用户显式带 role=tr 进来都可重做
+    // （再次完成会覆盖 translated_csv，译者更新为重做者）
+    if (tr.state === '完成') {
+      if (role === 'tr') return { activeRole: 'tr', blocked: false, blockMsg: '' }
+      return tr.user === me ? done : none
+    }
     if (tr.user !== me) return none
-    // 本人已完成的轨：从工作台/历史页显式带 role 进来时允许重新修改（再次完成会覆盖阶段目录）
-    if (tr.state === '完成' && role !== 'tr') return done
     return { activeRole: 'tr', blocked: false, blockMsg: '' }
   }
   const asPr = (): MyStatus => {

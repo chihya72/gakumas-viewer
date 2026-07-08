@@ -14,20 +14,25 @@
       <div v-for="d in rows" :key="d.number" class="row">
         <n-tag size="small" type="success" :bordered="false">完成</n-tag>
         <span class="title">{{ d.title }}</span>
-        <span class="user">翻译：{{ displayUser(d.tr.user) }}</span>
-        <span class="user">校对：{{ displayUser(d.pr.user) }}</span>
-        <span class="user">{{ formatGmt8(d.updatedAt) }}</span>
+        <span class="user"
+          >翻译：{{ displayUser(d.tr.user)
+          }}<template v-if="d.trCsvTime">
+            · {{ formatGmt8(d.trCsvTime) }}</template
+          ></span
+        >
+        <span class="user"
+          >校对：{{ displayUser(d.pr.user)
+          }}<template v-if="d.prCsvTime">
+            · {{ formatGmt8(d.prCsvTime) }}</template
+          ></span
+        >
         <n-button size="tiny" @click="downloadCsv(d)">校对CSV</n-button>
         <n-button size="tiny" @click="downloadChineseTxt(d)"
           >纯中文TXT</n-button
         >
-        <!-- 本人可对已完成稿重新修改（再次完成会覆盖阶段目录） -->
-        <n-button
-          v-if="me && d.tr.user === me"
-          size="tiny"
-          @click="openEditor(d, 'tr')"
-        >
-          重新修改翻译
+        <!-- 重新翻译对所有登录用户常开（再次完成覆盖阶段目录、译者更新为重做者）；校对仍限本人 -->
+        <n-button size="tiny" @click="openEditor(d, 'tr')">
+          重新翻译
         </n-button>
         <n-button
           v-if="me && d.pr.user === me"
@@ -59,6 +64,7 @@ import {
   editorUrlForPath,
   fetchNameDict,
   fetchRawTxt,
+  fileCommitTime,
   formatGmt8,
   isArchivedIssue,
   workRawUrl,
@@ -98,6 +104,14 @@ async function refresh() {
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
       .sort((a, b) => b.number - a.number)
+    // 补 翻译/校对 CSV 各自的最后 commit 时间
+    const w = store.octokitWrapper
+    await Promise.all(
+      rows.value.map(async (d) => {
+        d.trCsvTime = await fileCommitTime(w, d.translatedPath)
+        d.prCsvTime = await fileCommitTime(w, d.proofreadPath)
+      })
+    )
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}`
   }
