@@ -3,7 +3,7 @@
 <template>
   <div class="workbench">
     <push-header title="汉化工作台" />
-    <div class="build-mark">构建标记 B15（若看不到此行=仍是旧缓存）</div>
+    <div class="build-mark">构建标记 B16（若看不到此行=仍是旧缓存）</div>
 
     <div v-if="!store.octokitWrapper?.userMeta" class="hint">
       请先登录 GitHub 账号（需已加入工作组，即对工作仓库有写权限）。
@@ -21,6 +21,7 @@
       <table v-if="rows.length" class="grid">
         <thead>
           <tr>
+            <th class="archive-col"></th>
             <th>剧情</th>
             <th>翻译</th>
             <th>校对</th>
@@ -28,25 +29,26 @@
         </thead>
         <tbody>
           <tr v-for="d in rows" :key="d.number" :class="{ mine: isMine(d) }">
+            <td class="archive-col">
+              <n-button
+                size="tiny"
+                type="warning"
+                :loading="busy === d.number"
+                @click="archive(d)"
+              >
+                过时存档
+              </n-button>
+            </td>
             <td class="doc">
               <a href="javascript:;" @click="open(d)">{{ d.title }}</a>
             </td>
-            <!-- 翻译轨 -->
             <td>
               <div class="cell">
                 <n-tag size="small" :type="tagType(d.tr.state)" :bordered="false">
                   {{ trackLabel(d.tr) }}
                 </n-tag>
                 <n-button size="tiny" @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')">
-                  AI机翻CSV
-                </n-button>
-                <n-button
-                  size="tiny"
-                  type="warning"
-                  :loading="busy === d.number"
-                  @click="archive(d)"
-                >
-                  存档
+                  下载AI机翻CSV
                 </n-button>
                 <n-button
                   v-if="d.tr.state === '待认领'"
@@ -81,7 +83,7 @@
                   :disabled="d.tr.state !== '完成'"
                   @click="downloadCsvPath(d.translatedPath, d.title, '翻译')"
                 >
-                  翻译CSV
+                  下载人工翻译CSV
                 </n-button>
                 <n-button
                   v-if="d.pr.state === '待认领'"
@@ -109,22 +111,6 @@
         </tbody>
       </table>
       <n-empty v-else-if="!loading" description="工作仓库暂无剧情" />
-
-      <template v-if="completed.length">
-        <h3>已完成（{{ completed.length }}）</h3>
-        <div v-for="d in completed" :key="d.number" class="stock-row">
-          <n-tag size="small" type="success" :bordered="false">完成</n-tag>
-          <span class="stock-title">{{ d.title }}</span>
-          <span class="stock-user">翻译：{{ displayUser(d.tr.user) }}</span>
-          <span class="stock-user">校对：{{ displayUser(d.pr.user) }}</span>
-          <n-button size="tiny" @click="downloadCsvPath(d.proofreadPath, d.title, '校对')">
-            校对CSV
-          </n-button>
-          <n-button size="tiny" @click="downloadChineseTxt(d)">
-            纯中文TXT
-          </n-button>
-        </div>
-      </template>
     </template>
   </div>
 </template>
@@ -136,7 +122,6 @@ import { NButton, NTag, NEmpty, NAlert, NCheckbox } from 'naive-ui'
 import { store } from '../../store'
 import PushHeader from '../translate/push/PushHeader.vue'
 import FileSaver from 'file-saver'
-import { extractInfoFromCsvText } from '../../helper/csv'
 import { displayUser } from '../../helper/users'
 import {
   WORK_OWNER,
@@ -147,9 +132,6 @@ import {
   applyTrack,
   editorUrlForPath,
   workRawUrl,
-  fetchRawTxt,
-  buildChineseTxt,
-  fetchNameDict,
   type DocTask,
   type TrackKey,
   type TrackState,
@@ -161,7 +143,6 @@ const busy = ref<number | null>(null)
 const error = ref('')
 const onlyMine = ref(false)
 const docs = ref<DocTask[]>([])
-const completed = ref<DocTask[]>([])
 
 const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
 
@@ -198,15 +179,6 @@ async function refresh() {
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
       .sort((a, b) => a.title.localeCompare(b.title))
-    const closed = await store.octokitWrapper.listIssues(
-      WORK_OWNER,
-      WORK_REPO,
-      { state: 'closed' }
-    )
-    completed.value = (closed as any[])
-      .filter((i) => !i.pull_request && !isArchivedIssue(i))
-      .map(docFromIssue)
-      .sort((a, b) => a.title.localeCompare(b.title))
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}（确认工作仓库存在且有权限）`
   }
@@ -215,7 +187,7 @@ async function refresh() {
 
 async function archive(d: DocTask) {
   if (!store.octokitWrapper) return
-  if (!confirm(`存档 ${d.title}？`)) return
+  if (!confirm(`过时存档 ${d.title}？`)) return
   busy.value = d.number
   try {
     await archiveIssue(store.octokitWrapper, d.number)
@@ -233,33 +205,6 @@ async function downloadCsvPath(path: string, title: string, label: string) {
     return
   }
   FileSaver.saveAs(await r.blob(), `${title}_${label}.csv`)
-}
-
-// 下载纯中文 TXT：原始 txt(campus 权威源) + 成品 CSV 在浏览器合并
-async function downloadChineseTxt(d: DocTask) {
-  const [rawTxt, csvResp, dict] = await Promise.all([
-    fetchRawTxt(d.title),
-    fetch(workRawUrl(d.proofreadPath)),
-    fetchNameDict(),
-  ])
-  if (rawTxt === null) {
-    alert('原始 txt 不存在（campus 仓库与工作仓库 raw/ 均未找到）')
-    return
-  }
-  if (!csvResp.ok) {
-    alert(`CSV 下载失败: ${csvResp.status}`)
-    return
-  }
-  try {
-    const { data } = extractInfoFromCsvText(await csvResp.text())
-    const merged = buildChineseTxt(rawTxt, data, dict)
-    FileSaver.saveAs(
-      new Blob([merged], { type: 'text/plain;charset=utf-8' }),
-      `${d.title}.txt`
-    )
-  } catch (e: any) {
-    alert(`纯中文TXT生成失败：${e?.message || e}`)
-  }
 }
 
 function open(d: DocTask, role?: TrackKey) {
@@ -333,6 +278,7 @@ onMounted(() => {
 .grid {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 .grid th,
 .grid td {
@@ -345,8 +291,14 @@ onMounted(() => {
   font-weight: 500;
   font-size: 13px;
 }
+.archive-col {
+  width: 78px;
+}
 .grid tr.mine {
   background: #f6fbff;
+}
+.doc {
+  word-break: break-all;
 }
 .doc .parts {
   color: #aaa;
@@ -357,21 +309,6 @@ onMounted(() => {
   display: flex;
   gap: 6px;
   align-items: center;
-}
-.stock-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 6px 0;
-  border-bottom: 1px solid #eee;
-}
-.stock-title {
-  flex: 1;
-  word-break: break-all;
-}
-.stock-user {
-  color: #666;
-  font-size: 12px;
-  white-space: nowrap;
+  flex-wrap: wrap;
 }
 </style>
