@@ -9,7 +9,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: {
-        enabled: true,
+        // dev 模式关掉 Service Worker，否则会激进缓存导致改动看不到（Ctrl+Shift+R 也绕不过）
+        enabled: false,
       },
       manifest: {
         name: 'SC-VIEWER',

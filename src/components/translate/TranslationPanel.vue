@@ -33,8 +33,20 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { store } from '../../store'
 import { DataSource } from '../../helper/enum-interfaces'
-import { initTranslatedStoryIndex } from '../../helper/path'
+import { initTranslatedStoryIndex, parseGithubBlobUrl } from '../../helper/path'
+import { extractInfoFromCsvText } from '../../helper/csv'
 import { translateDataLines } from '../../helper/translate'
+import {
+  WORK_OWNER,
+  WORK_REPO,
+  TRACK_LABEL,
+  parseTrack,
+  myStatusOf,
+  applyTrack,
+  pushContentToSource,
+  validateRowsHtmlTags,
+  type MyStatus,
+} from '../../helper/workflow'
 import HistoryIcon from '../icon/HistoryIcon.vue'
 import RenameIcon from '../icon/RenameIcon.vue'
 import OpenAIIcon from '../icon/OpenAIIcon.vue'
@@ -129,10 +141,127 @@ const pretranslatedCsvUrl = computed(() => {
   return null
 })
 
+// ===== 工作台协作：底部「完成」按钮按身份变，保存/完成直推工作仓库，无推送面板 =====
+const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
+const issueNumber = computed(() => {
+  const n = Number(route.query.issue)
+  return route.query.issue && !isNaN(n) ? n : null
+})
+const isWorkFile = computed(() => {
+  try {
+    parseGithubBlobUrl(store.sourceUrl)
+    return true
+  } catch {
+    return false
+  }
+})
+const workStatus = ref<MyStatus>({ activeRole: null, blocked: false, blockMsg: '' })
+const workStatusLoaded = ref(false)
+async function loadWorkStatus() {
+  workStatus.value = { activeRole: null, blocked: false, blockMsg: '' }
+  workStatusLoaded.value = false
+  if (!issueNumber.value || !store.octokitWrapper?.userMeta) {
+    workStatusLoaded.value = true
+    return
+  }
+  try {
+    const issue = await store.octokitWrapper.getIssue(
+      WORK_OWNER,
+      WORK_REPO,
+      issueNumber.value
+    )
+    const role = route.query.role
+    workStatus.value = myStatusOf(
+      parseTrack(issue.body, 'tr'),
+      parseTrack(issue.body, 'pr'),
+      me.value,
+      role === 'tr' || role === 'pr' ? role : undefined
+    )
+  } catch {
+    /* 未登录/无 issue 时静默 */
+  } finally {
+    // 只读：校对被"翻译未完成"挡住，或该轨已完成（防误改已完成稿）
+    store.readOnly = workStatus.value.blocked || !!workStatus.value.finished
+    workStatusLoaded.value = true
+  }
+}
+// 底部按钮文案：有角色→翻译完成/校对完成；校对被挡→待翻译完成；否则→保存
+const completeLabel = computed(() => {
+  // 工作任务(带 issue)加载状态期间显示占位，避免"保存"闪一下再变"翻译完成"
+  if (issueNumber.value && !workStatusLoaded.value) return '…'
+  const r = workStatus.value.activeRole
+  if (r) return `${TRACK_LABEL[r]}完成`
+  if (workStatus.value.blocked) return '待翻译完成'
+  if (workStatus.value.finished) return '已完成'
+  if (isWorkFile.value) return '保存'
+  return t('translate.tab.download')
+})
+function base64ToUtf8(b64: string): string {
+  const bin = atob(b64.replace(/\n/g, ''))
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
+}
+async function pushCurrent(silent = false) {
+  if (!communication.value || !store.octokitWrapper || !isWorkFile.value)
+    return false
+  communication.value.updateBase64Content()
+  if (!store.base64content) return false
+  const { data } = extractInfoFromCsvText(base64ToUtf8(store.base64content))
+  const tagErrors = validateRowsHtmlTags(data)
+  if (tagErrors.length) {
+    alert(`HTML标签不一致，禁止保存：\n${tagErrors.slice(0, 5).join('\n')}`)
+    return false
+  }
+  try {
+    await pushContentToSource(
+      store.octokitWrapper,
+      store.sourceUrl,
+      store.base64content,
+      `更新翻译 ${store.jsonUrl}`
+    )
+    if (!silent)
+      notification.success({ content: '已保存到仓库', duration: 1500 })
+    return true
+  } catch (e: any) {
+    alert(e?.message || e)
+    return false
+  }
+}
+async function onCompleteClick() {
+  if (workStatus.value.blocked) {
+    alert(workStatus.value.blockMsg)
+    return
+  }
+  if (workStatus.value.finished) return // 已完成：只读展示，无操作
+  // 非工作文件：退化为下载
+  if (!isWorkFile.value) {
+    communication?.value?.downloadData()
+    return
+  }
+  const ok = await pushCurrent(!!workStatus.value.activeRole)
+  const role = workStatus.value.activeRole
+  if (role && ok && issueNumber.value && store.octokitWrapper) {
+    await applyTrack(store.octokitWrapper, issueNumber.value, role, {
+      user: me.value,
+      state: '完成',
+    })
+    notification.success({
+      content: `${TRACK_LABEL[role]}已完成`,
+      duration: 2000,
+    })
+    router.push('/')
+  }
+}
+watch(
+  [issueNumber, () => store.sourceUrl, me, () => route.query.role],
+  loadWorkStatus
+)
+
 // onMounted and watch controls when to reload data
 // if this page is never loaded, onMounted will activate to load data from location url
 onMounted(() => {
   loadDataFromLocation()
+  loadWorkStatus()
 })
 // if this page has been loaded for once, use watch to detect when to reload
 // currently, the reload flag is used when clicking a history save at home page
@@ -198,6 +327,9 @@ async function loadDataFromEncodedUrl(encodedSrcUrl: string) {
     hash: `#${encodedSrcUrl}`,
     query: {
       source: DataSource.Remote,
+      // 保留工作台带来的身份参数，否则底部按钮/只读判定失效
+      ...(route.query.issue ? { issue: route.query.issue } : {}),
+      ...(route.query.role ? { role: route.query.role } : {}),
     },
   })
   nextTick(() =>
@@ -682,22 +814,19 @@ const currentDialogueCount = computed(() => {
           {{ t('translate.tab.rename') }}</n-button
         >
       </div>
-      <div class="clickable" @click="showCompleteDropdown = true">
+      <div class="clickable" @click="onCompleteClick">
         <n-icon size="18">
           <TaskCompleteIcon />
         </n-icon>
         <br />
-        <n-dropdown
-          :show="showCompleteDropdown"
+        <n-button
           text
           type="default"
           :focusable="false"
-          :options="completeOptions"
-          @select="handleCompleteSelect"
-          @clickoutside="showCompleteDropdown = false"
+          :disabled="workStatus.blocked || workStatus.finished"
         >
-          {{ t('translate.tab.complete') }}
-        </n-dropdown>
+          {{ completeLabel }}
+        </n-button>
       </div>
       <div class="clickable" @click="showSwitchModal = true">
         <n-icon size="18"> <Repeat /> </n-icon><br />

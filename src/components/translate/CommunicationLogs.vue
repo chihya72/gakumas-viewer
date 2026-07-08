@@ -206,19 +206,8 @@ export default defineComponent({
       this.translatedCsvUrl = queryTranslatedCsv(newVal)
       // if (store.currentMode !== DataMode.Raw) return
       this.pretranslatedCsvUrl = await queryPreTranslatedCsv(newVal)
-      if (this.translatedCsvUrl) {
-        this.notifyToSwitchToRemote(
-          this.translatedCsvUrl,
-          this.$t('translate.remoteTranslationDetectedTitle')
-        )
-        return
-      }
-      if (this.pretranslatedCsvUrl) {
-        this.notifyToSwitchToRemote(
-          this.pretranslatedCsvUrl,
-          this.$t('translate.remotePreTranslationDetectedTitle')
-        )
-      }
+      // 工作台流程：直接编辑打开的文件，不再自动弹"发现远程翻译/预翻译"提示
+      // （pretranslatedCsvUrl 仍保留，供"预翻译"按钮手动使用）
     },
     data() {
       this.isPreviewing = false

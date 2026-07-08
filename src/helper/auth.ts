@@ -29,12 +29,9 @@ const GITHUB_API_PROXY = import.meta.env.VITE_GITHUB_API_PROXY
 // const defaultGithubProxy = 'https://strawberrytree.top'
 const useGithubProxy = true
 const cancelLoginUrl = `https://github.com/settings/connections/applications/${clientId}`
-const rootRepoName =
-  process.env.NODE_ENV === 'development'
-    ? 'gakuen-adapted-translation-data'
-    : 'gakuen-adapted-translation-data'
-const rootOwner =
-  process.env.NODE_ENV === 'development' ? 'imas-tools' : 'imas-tools'
+// ponytail: 硬编码为本汉化组自己的 fork（owner 就是本 fork 维护者）；上游是 imas-tools/gakuen-adapted-translation-data
+const rootRepoName = 'gakuen-adapted-translation-data-pm'
+const rootOwner = 'chihya72'
 const rootBranch = 'main'
 
 interface BranchComparison {
@@ -197,7 +194,13 @@ class OctokitWrapper {
     })
   }
 
-  async getContent(owner: string, repo: string, branch: string, path: string) {
+  async getContent(
+    owner: string,
+    repo: string,
+    branch: string,
+    path: string,
+    bustCache = false
+  ) {
     const { data } = await this.request(
       'GET /repos/{owner}/{repo}/contents/{path}',
       {
@@ -205,6 +208,8 @@ class OctokitWrapper {
         repo,
         branch,
         path,
+        // 破坏 API 代理缓存，确保拿到最新 sha（否则 PUT 会 409 sha 冲突）
+        ...(bustCache ? { _cb: Date.now() } : {}),
         headers: this.headers,
       }
     )
@@ -219,34 +224,40 @@ class OctokitWrapper {
     message: string,
     content: string
   ) {
-    let sha = null
-    try {
-      const previousData = await this.getContent(owner, repo, branch, path)
-      // @ts-ignore
-      sha = previousData.sha
-    } catch (e: any) {
-      if (e?.response?.status === 404) {
-        // console.log('original resource not found, creating file...')
-      } else {
-        console.error(e)
+    const freshSha = async (): Promise<string | undefined> => {
+      try {
+        const d = await this.getContent(owner, repo, branch, path, true)
+        // @ts-ignore
+        return d.sha
+      } catch (e: any) {
+        if (e?.response?.status === 404) return undefined // 文件不存在=新建
         throw e
       }
     }
 
-    const { data } = await this.request(
-      'PUT /repos/{owner}/{repo}/contents/{path}',
-      {
-        owner,
-        repo,
-        branch,
-        path,
-        sha,
-        message,
-        content,
-        headers: this.headers,
-      }
-    )
-    return data
+    const put = async (useSha: string | undefined) => {
+      const { data } = await this.request(
+        'PUT /repos/{owner}/{repo}/contents/{path}',
+        {
+          owner,
+          repo,
+          branch,
+          path,
+          sha: useSha,
+          message,
+          content,
+          headers: this.headers,
+        }
+      )
+      return data
+    }
+
+    // 始终用最新 sha；万一仍冲突（代理缓存顽固），再取一次 sha 重试
+    try {
+      return await put(await freshSha())
+    } catch (e: any) {
+      return await put(await freshSha())
+    }
   }
 
   async getOpenPR(owner: string, repo: string, head: string) {
@@ -278,6 +289,61 @@ class OctokitWrapper {
       headers: this.headers,
     })
 
+    return data
+  }
+
+  // 认领台账用：列出工作仓库的 open issues（≤100，翻译组规模足够）
+  // ponytail: 不分页，超过 100 篇待办再加分页
+  async listIssues(
+    owner: string,
+    repo: string,
+    params: {
+      state?: 'open' | 'closed' | 'all'
+      assignee?: string
+      labels?: string
+    } = {}
+  ) {
+    const { data } = await this.request('GET /repos/{owner}/{repo}/issues', {
+      owner,
+      repo,
+      state: 'open',
+      per_page: 100,
+      ...params,
+      headers: this.headers,
+    })
+    return data
+  }
+
+  async getIssue(owner: string, repo: string, issue_number: number) {
+    const { data } = await this.request(
+      'GET /repos/{owner}/{repo}/issues/{issue_number}',
+      { owner, repo, issue_number, headers: this.headers }
+    )
+    return data
+  }
+
+  // 认领/交活/改状态：body 存双轨标记，assignees 存认领人并集
+  async updateIssue(
+    owner: string,
+    repo: string,
+    issue_number: number,
+    params: {
+      body?: string
+      labels?: string[]
+      assignees?: string[]
+      state?: 'open' | 'closed'
+    }
+  ) {
+    const { data } = await this.request(
+      'PATCH /repos/{owner}/{repo}/issues/{issue_number}',
+      {
+        owner,
+        repo,
+        issue_number,
+        ...params,
+        headers: this.headers,
+      }
+    )
     return data
   }
 }

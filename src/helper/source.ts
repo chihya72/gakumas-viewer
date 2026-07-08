@@ -100,6 +100,13 @@ async function preprocessSourceInput(
   path: string
   mode: DataMode
 }> {
+  // 直推用：仅远程 github csv 源可写回，其余置空
+  store.sourceUrl =
+    source === DataSource.Remote &&
+    typeof sourceInput === 'string' &&
+    sourceInput.startsWith('https://github.com')
+      ? sourceInput
+      : ''
   switch (source) {
     case DataSource.Remote:
       if (typeof sourceInput !== 'string')

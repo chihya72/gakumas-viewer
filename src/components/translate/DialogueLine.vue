@@ -24,7 +24,7 @@
         <!-- the "trans" element is shown when the component is not in edit mode -->
         <div v-if="!isEditing" class="trans">{{ display_trans }}</div>
         <n-button
-          v-if="!isEditing && isPreTranslation"
+          v-if="!isEditing && isPreTranslation && !readOnly"
           class="edit-toggle"
           title="approve"
           circle
@@ -39,7 +39,7 @@
           </template>
         </n-button>
         <n-button
-          v-if="!isEditing"
+          v-if="!isEditing && !readOnly"
           class="edit-toggle"
           strong
           primary
@@ -196,6 +196,9 @@ export default defineComponent({
     }
   },
   computed: {
+    readOnly() {
+      return store.readOnly
+    },
     display_text() {
       if (this.text) return this.text.replaceAll('\\n', '\n')
       return ''
@@ -249,6 +252,12 @@ export default defineComponent({
     },
     // define the "saveEdit" method to save the edited translation
     trySaveEdit() {
+      // 工作仓库文件（直推模式）：改动直接保留在页面，最终"完成"时直推回源路径。
+      // 不切 history 模式、不改 URL（否则会冲掉 issue/role 参数）、不弹覆盖警告。
+      if (store.sourceUrl) {
+        this.saveEdit()
+        return
+      }
       // 3 cases, action besides save
       // if not in histroy mode and has history, overwrite warning and change mode
       // if not in histroy mode but no history, change mode

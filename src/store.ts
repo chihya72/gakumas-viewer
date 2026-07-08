@@ -95,6 +95,10 @@ const store = reactive({
   // current translation panel info
   csvFilename: '',
   jsonUrl: '', // e.g. produce_events/xxx.json
+  // 直推用：当前 CSV 被加载时的完整 github blob url（非远程 github 源时为 ''）
+  sourceUrl: '',
+  // 只读：认领了校对但翻译未完成时，编辑器禁止编辑
+  readOnly: false,
   eventsCollectionMeta: null as null | EventsCollectionMeta,
 })
 

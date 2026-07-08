@@ -117,6 +117,21 @@ function extractInfoFromUrl(fileUrl: string) {
   throw new Error('wrong prefix')
 }
 
+// 直推用：解析完整 blob url → {owner, repo, branch, path}
+// https://github.com/{owner}/{repo}/blob/{branch}/{path...}
+function parseGithubBlobUrl(url: string) {
+  const m = url.match(
+    /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
+  )
+  if (!m) throw new Error(`not a github blob url: ${url}`)
+  return {
+    owner: m[1],
+    repo: m[2],
+    branch: m[3],
+    path: decodeURIComponent(m[4]),
+  }
+}
+
 // idol options are used as options to push file to github
 const idolOptionKeys = [
   '283活动剧情',
@@ -531,6 +546,7 @@ export {
   getRemoteImgPath,
   getIframeSrc,
   extractInfoFromUrl,
+  parseGithubBlobUrl,
   idolOptions,
   getJsonPath,
   nextJsonUrl,
