@@ -14,16 +14,6 @@ export const WORK_REPO =
   import.meta.env.VITE_WORK_REPO || 'gakumas-translation-work'
 export const WORK_BRANCH = import.meta.env.VITE_WORK_BRANCH || 'main'
 
-// 成品仓库（入库目标）：从 VITE_TRANSLATION_DIR 解析 owner/repo/branch
-const dataDirMatch = (
-  (import.meta.env.VITE_TRANSLATION_DIR as string) || ''
-).match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)/)
-export const DATA_OWNER = dataDirMatch?.[1] || 'chihya72'
-export const DATA_REPO = dataDirMatch?.[2] || 'gakuen-adapted-translation-data-pm'
-export const DATA_BRANCH = dataDirMatch?.[3] || 'main'
-
-export const STOCKED_LABEL = '已入库'
-
 export const STATES = ['待认领', '进行中', '完成'] as const
 export type TrackState = (typeof STATES)[number]
 
@@ -101,68 +91,6 @@ export async function pushContentToSource(
 ) {
   const { owner, repo, branch, path } = parseGithubBlobUrl(sourceUrl)
   return wrapper.updateContent(owner, repo, branch, path, message, base64)
-}
-
-// ===== 入库：两轨完成的文件 → 成品仓库(data-pm) + index.json + issue 标"已入库" =====
-
-// UTF-8 安全的 base64 编解码（浏览器 atob/btoa 只认 latin1）
-function b64DecodeUtf8(b64: string): string {
-  const bin = atob(b64.replace(/\n/g, ''))
-  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
-  return new TextDecoder().decode(bytes)
-}
-function b64EncodeUtf8(str: string): string {
-  const bytes = new TextEncoder().encode(str)
-  let bin = ''
-  bytes.forEach((b) => (bin += String.fromCharCode(b)))
-  return btoa(bin)
-}
-
-// 入库单个文件：工作仓库 path 的 CSV → data-pm 同路径 + 更新 index.json
-export async function stockToDataRepo(
-  wrapper: any,
-  title: string, // 扁平名（不带 .csv），如 adv_cidol-amao-3-000_01
-  path: string // 仓库内路径 data/adv/cidol-amao-3-000/01.csv
-): Promise<void> {
-  // 1. 取工作仓库最新内容（base64 直传，不解码）
-  const src = await wrapper.getContent(
-    WORK_OWNER,
-    WORK_REPO,
-    WORK_BRANCH,
-    path,
-    true
-  )
-  const csvB64 = (src.content as string).replace(/\n/g, '')
-  // 2. 推到成品仓库同路径
-  await wrapper.updateContent(
-    DATA_OWNER,
-    DATA_REPO,
-    DATA_BRANCH,
-    path,
-    `入库 ${title}`,
-    csvB64
-  )
-  // 3. 更新 index.json（原名.txt -> ./路径.csv）
-  const idx = await wrapper.getContent(
-    DATA_OWNER,
-    DATA_REPO,
-    DATA_BRANCH,
-    'index.json',
-    true
-  )
-  const index = JSON.parse(b64DecodeUtf8(idx.content))
-  const key = `${title}.txt`
-  if (index[key] !== `./${path}`) {
-    index[key] = `./${path}`
-    await wrapper.updateContent(
-      DATA_OWNER,
-      DATA_REPO,
-      DATA_BRANCH,
-      'index.json',
-      `index: ${title}`,
-      b64EncodeUtf8(JSON.stringify(index, null, 4))
-    )
-  }
 }
 
 // ===== 网页端产物下载：成品 CSV / 纯中文 txt =====

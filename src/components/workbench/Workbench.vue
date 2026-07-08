@@ -3,7 +3,7 @@
 <template>
   <div class="workbench">
     <push-header title="汉化工作台" />
-    <div class="build-mark">构建标记 B13（若看不到此行=仍是旧缓存）</div>
+    <div class="build-mark">构建标记 B14（若看不到此行=仍是旧缓存）</div>
 
     <div v-if="!store.octokitWrapper?.userMeta" class="hint">
       请先登录 GitHub 账号（需已加入工作组，即对工作仓库有写权限）。
@@ -12,7 +12,7 @@
     <template v-else>
       <div class="toolbar">
         <n-button size="small" :loading="loading" @click="refresh">刷新</n-button>
-        <span class="me">我：{{ me }}</span>
+        <span class="me">我：{{ displayUser(me) }}</span>
         <n-checkbox v-model:checked="onlyMine">只看我的</n-checkbox>
       </div>
 
@@ -35,7 +35,7 @@
             <td>
               <div class="cell">
                 <n-tag size="small" :type="tagType(d.tr.state)" :bordered="false">
-                  {{ d.tr.user ? `${d.tr.user} · ${d.tr.state}` : '待认领' }}
+                  {{ trackLabel(d.tr) }}
                 </n-tag>
                 <n-button
                   v-if="d.tr.state === '待认领'"
@@ -92,22 +92,16 @@
       </table>
       <n-empty v-else-if="!loading" description="工作仓库暂无剧情" />
 
-      <template v-if="stockable.length">
-        <h3>已完成待入库（{{ stockable.length }}）</h3>
-        <div v-for="d in stockable" :key="d.number" class="stock-row">
+      <template v-if="completed.length">
+        <h3>已完成（{{ completed.length }}）</h3>
+        <div v-for="d in completed" :key="d.number" class="stock-row">
           <n-tag size="small" type="success" :bordered="false">完成</n-tag>
           <span class="stock-title">{{ d.title }}</span>
+          <span class="stock-user">翻译：{{ displayUser(d.tr.user) }}</span>
+          <span class="stock-user">校对：{{ displayUser(d.pr.user) }}</span>
           <n-button size="tiny" @click="downloadCsv(d)">下载CSV</n-button>
           <n-button size="tiny" @click="downloadChineseTxt(d)">
             纯中文TXT
-          </n-button>
-          <n-button
-            size="tiny"
-            type="primary"
-            :loading="busy === d.number"
-            @click="stock(d)"
-          >
-            入库 {{ DATA_REPO }}
           </n-button>
         </div>
       </template>
@@ -123,15 +117,13 @@ import { store } from '../../store'
 import PushHeader from '../translate/push/PushHeader.vue'
 import FileSaver from 'file-saver'
 import { extractInfoFromCsvText } from '../../helper/csv'
+import { displayUser } from '../../helper/users'
 import {
   WORK_OWNER,
   WORK_REPO,
-  DATA_REPO,
-  STOCKED_LABEL,
   docFromIssue,
   applyTrack,
   editorUrlForPath,
-  stockToDataRepo,
   workRawUrl,
   fetchRawTxt,
   buildChineseTxt,
@@ -147,8 +139,7 @@ const busy = ref<number | null>(null)
 const error = ref('')
 const onlyMine = ref(false)
 const docs = ref<DocTask[]>([])
-// 两轨完成(closed)且未标"已入库"的文件
-const stockable = ref<DocTask[]>([])
+const completed = ref<DocTask[]>([])
 
 const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
 
@@ -163,10 +154,16 @@ function tagType(s: TrackState) {
   return s === '完成' ? 'success' : s === '进行中' ? 'warning' : 'default'
 }
 
+function trackLabel(t: DocTask['tr']) {
+  return t.user ? `${displayUser(t.user)} · ${t.state}` : '待认领'
+}
+
 // 校对列显示文案：未认领始终"待认领"；已认领但翻译未完成显示"待校对"
 function prCellLabel(d: DocTask) {
   if (!d.pr.user) return '待认领'
-  return `${d.pr.user} · ${d.tr.state !== '完成' ? '待校对' : d.pr.state}`
+  return `${displayUser(d.pr.user)} · ${
+    d.tr.state !== '完成' ? '待校对' : d.pr.state
+  }`
 }
 
 async function refresh() {
@@ -179,18 +176,13 @@ async function refresh() {
       .filter((i) => !i.pull_request)
       .map(docFromIssue)
       .sort((a, b) => a.title.localeCompare(b.title))
-    // 已关闭(两轨完成)且未入库的
     const closed = await store.octokitWrapper.listIssues(
       WORK_OWNER,
       WORK_REPO,
       { state: 'closed' }
     )
-    stockable.value = (closed as any[])
-      .filter(
-        (i) =>
-          !i.pull_request &&
-          !(i.labels || []).some((l: any) => l.name === STOCKED_LABEL)
-      )
+    completed.value = (closed as any[])
+      .filter((i) => !i.pull_request)
       .map(docFromIssue)
       .sort((a, b) => a.title.localeCompare(b.title))
   } catch (e: any) {
@@ -234,22 +226,6 @@ async function downloadChineseTxt(d: DocTask) {
   } catch (e: any) {
     alert(`纯中文TXT生成失败：${e?.message || e}`)
   }
-}
-
-// 入库：CSV 推成品仓库 + 更新 index.json + issue 标"已入库"
-async function stock(d: DocTask) {
-  if (!store.octokitWrapper || !d.paths.length) return
-  busy.value = d.number
-  try {
-    await stockToDataRepo(store.octokitWrapper, d.title, d.paths[0])
-    await store.octokitWrapper.updateIssue(WORK_OWNER, WORK_REPO, d.number, {
-      labels: [STOCKED_LABEL],
-    })
-    await refresh()
-  } catch (e: any) {
-    alert(`入库失败：${e?.message || e}（需对 ${DATA_REPO} 有写权限）`)
-  }
-  busy.value = null
 }
 
 function open(d: DocTask, role?: TrackKey) {
@@ -350,5 +326,10 @@ onMounted(() => {
 .stock-title {
   flex: 1;
   word-break: break-all;
+}
+.stock-user {
+  color: #666;
+  font-size: 12px;
+  white-space: nowrap;
 }
 </style>
