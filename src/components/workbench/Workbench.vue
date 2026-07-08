@@ -3,7 +3,7 @@
 <template>
   <div class="workbench">
     <push-header title="汉化工作台" />
-    <div class="build-mark">构建标记 B19（若看不到此行=仍是旧缓存）</div>
+    <div class="build-mark">构建标记 B20（若看不到此行=仍是旧缓存）</div>
 
     <div v-if="!store.octokitWrapper?.userMeta" class="hint">
       请先登录 GitHub 账号（需已加入工作组，即对工作仓库有写权限）。
@@ -65,14 +65,15 @@
               <div class="cell-col">
                 <div class="cell-line status-line">
                   <n-tag
+                    class="status-tag"
                     size="small"
                     :type="tagType(d.tr.state)"
                     :bordered="false"
                   >
                     {{ trackLabel(d.tr) }}
                   </n-tag>
-                  <span v-if="d.trCsvTime" class="time">{{
-                    formatGmt8(d.trCsvTime)
+                  <span class="time">{{
+                    d.trCsvTime ? formatGmt8(d.trCsvTime) : ''
                   }}</span>
                 </div>
                 <div class="cell-line action-line">
@@ -80,7 +81,7 @@
                     size="tiny"
                     @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')"
                   >
-                    AI机翻CSV
+                    下载机翻CSV
                   </n-button>
                   <n-button
                     v-if="d.tr.state === '待认领'"
@@ -123,6 +124,7 @@
               <div class="cell-col">
                 <div class="cell-line status-line">
                   <n-tag
+                    class="status-tag"
                     size="small"
                     :type="
                       d.tr.state === '完成' ? tagType(d.pr.state) : 'default'
@@ -131,8 +133,8 @@
                   >
                     {{ prCellLabel(d) }}
                   </n-tag>
-                  <span v-if="d.prCsvTime" class="time">{{
-                    formatGmt8(d.prCsvTime)
+                  <span class="time">{{
+                    d.prCsvTime ? formatGmt8(d.prCsvTime) : ''
                   }}</span>
                 </div>
                 <div class="cell-line action-line">
@@ -141,8 +143,9 @@
                     size="tiny"
                     @click="downloadCsvPath(d.translatedPath, d.title, '翻译')"
                   >
-                    人工翻译CSV
+                    下载翻译CSV
                   </n-button>
+                  <span v-else class="action-spacer"></span>
                   <n-button
                     v-if="d.pr.state === '待认领'"
                     size="tiny"
@@ -206,8 +209,9 @@ const batchBusy = ref(false)
 const error = ref('')
 const onlyMine = ref(false)
 const docs = ref<DocTask[]>([])
-const autoRefresh = () => {
-  if (!busy.value && !batchBusy.value) refresh(false)
+let refreshSeq = 0
+const activatedRefresh = () => {
+  if (!busy.value && !batchBusy.value) refresh(docs.value.length === 0)
 }
 // 多选（批量认领用）
 const selected = ref<Set<number>>(new Set())
@@ -303,6 +307,7 @@ function prCellLabel(d: DocTask) {
 async function refresh(includeTimes = true) {
   if (!store.octokitWrapper) return
   if (loading.value) return
+  const seq = ++refreshSeq
   loading.value = true
   error.value = ''
   try {
@@ -313,27 +318,32 @@ async function refresh(includeTimes = true) {
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
       .map((d) => {
-        if (includeTimes) return d
         const old = oldTimes.get(d.number)
         return { ...d, trCsvTime: old?.trCsvTime, prCsvTime: old?.prCsvTime }
       })
       .sort((a, b) => a.title.localeCompare(b.title))
-    if (includeTimes) {
-      // 手动/首次刷新才补 commit 时间；自动刷新只拉 issue 状态，避免页面越刷越慢。
-      const w = store.octokitWrapper
-      await Promise.all(
-        docs.value.map(async (d) => {
-          if (d.tr.state === '完成')
-            d.trCsvTime = await fileCommitTime(w, d.translatedPath)
-          if (d.pr.state === '完成')
-            d.prCsvTime = await fileCommitTime(w, d.proofreadPath)
-        })
-      )
-    }
+    if (includeTimes) fillCommitTimes(seq)
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}（确认工作仓库存在且有权限）`
   }
   loading.value = false
+}
+
+async function fillCommitTimes(seq: number) {
+  const w = store.octokitWrapper
+  if (!w) return
+  const times = await Promise.all(
+    docs.value.map(async (d) => ({
+      number: d.number,
+      trCsvTime:
+        d.tr.state === '完成' ? await fileCommitTime(w, d.translatedPath) : '',
+      prCsvTime:
+        d.pr.state === '完成' ? await fileCommitTime(w, d.proofreadPath) : '',
+    }))
+  )
+  if (seq !== refreshSeq) return
+  const byNumber = new Map(times.map((t) => [t.number, t]))
+  docs.value = docs.value.map((d) => ({ ...d, ...byNumber.get(d.number) }))
 }
 
 async function downloadCsvPath(path: string, title: string, label: string) {
@@ -386,7 +396,7 @@ watch(
 onMounted(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
-onActivated(autoRefresh)
+onActivated(activatedRefresh)
 </script>
 
 <script lang="ts">
@@ -466,17 +476,28 @@ export default {
   gap: 7px;
   min-height: 54px;
 }
-.cell-line {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
 .status-line {
+  display: grid;
+  grid-template-columns: minmax(108px, max-content) 86px;
+  column-gap: 10px;
+  align-items: center;
   min-height: 22px;
 }
+.status-tag {
+  justify-self: start;
+  max-width: 190px;
+}
+.action-line {
+  display: grid;
+  grid-template-columns: 104px 86px 92px;
+  gap: 6px;
+  align-items: center;
+}
 .action-line :deep(.n-button) {
-  min-width: 68px;
+  width: 100%;
+}
+.action-spacer {
+  width: 104px;
 }
 .time {
   color: #999;
