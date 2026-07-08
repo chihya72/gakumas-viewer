@@ -6,7 +6,9 @@
     </div>
     <template v-else>
       <div class="toolbar">
-        <n-button size="small" :loading="loading" @click="refresh">刷新</n-button>
+        <n-button size="small" :loading="loading" @click="refresh"
+          >刷新</n-button
+        >
       </div>
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
       <div v-for="d in rows" :key="d.number" class="row">
@@ -33,7 +35,7 @@ import { ref, onMounted, watch } from 'vue'
 import { NButton, NTag, NEmpty, NAlert } from 'naive-ui'
 import PushHeader from '../translate/push/PushHeader.vue'
 import { store } from '../../store'
-import { displayUser } from '../../helper/users'
+import { displayUser, loadUsers } from '../../helper/users'
 import {
   WORK_OWNER,
   WORK_REPO,
@@ -58,9 +60,14 @@ async function refresh() {
   loading.value = true
   error.value = ''
   try {
-    const issues = await store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO, {
-      state: 'closed',
-    })
+    await loadUsers(store.octokitWrapper)
+    const issues = await store.octokitWrapper.listIssues(
+      WORK_OWNER,
+      WORK_REPO,
+      {
+        state: 'closed',
+      }
+    )
     rows.value = (issues as any[])
       .filter((i) => !i.pull_request && isArchivedIssue(i))
       .map(docFromIssue)
@@ -92,6 +99,12 @@ watch(
 onMounted(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
+</script>
+
+<script lang="ts">
+export default {
+  name: 'ArchivePanel',
+}
 </script>
 
 <style scoped>

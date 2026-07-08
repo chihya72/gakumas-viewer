@@ -41,7 +41,10 @@ function markerRe(key: TrackKey) {
   return new RegExp(`<!--\\s*${key}:([^:>]*):([^>]*?)-->`)
 }
 
-export function parseTrack(body: string | null | undefined, key: TrackKey): Track {
+export function parseTrack(
+  body: string | null | undefined,
+  key: TrackKey
+): Track {
   const m = (body || '').match(markerRe(key))
   if (!m) return { user: '', state: '待认领' }
   const user = m[1].trim()
@@ -82,19 +85,28 @@ function csvPathFromTitle(title: string, dir: string): string {
 function stagePathFromAny(path: string, title: string, dir: string): string {
   if (!path) return csvPathFromTitle(title, dir)
   const parts = path.split('/')
-  if (['data', 'ai_csv', 'translated_csv', 'proofread_csv'].includes(parts[0])) {
+  if (
+    ['data', 'ai_csv', 'translated_csv', 'proofread_csv'].includes(parts[0])
+  ) {
     return [dir, ...parts.slice(1)].join('/')
   }
   return csvPathFromTitle(title, dir)
 }
 
-export function stagePath(d: DocTask, stage: 'ai' | 'translated' | 'proofread') {
+export function stagePath(
+  d: DocTask,
+  stage: 'ai' | 'translated' | 'proofread'
+) {
   if (stage === 'ai') return d.aiPath
   if (stage === 'translated') return d.translatedPath
   return d.proofreadPath
 }
 
-export function completionPath(sourcePath: string, title: string, role: TrackKey) {
+export function completionPath(
+  sourcePath: string,
+  title: string,
+  role: TrackKey
+) {
   return stagePathFromAny(
     sourcePath,
     title,
@@ -136,7 +148,14 @@ export async function pushContentToWorkPath(
   base64: string,
   message: string
 ) {
-  return wrapper.updateContent(WORK_OWNER, WORK_REPO, WORK_BRANCH, path, message, base64)
+  return wrapper.updateContent(
+    WORK_OWNER,
+    WORK_REPO,
+    WORK_BRANCH,
+    path,
+    message,
+    base64
+  )
 }
 
 // ===== 网页端产物下载：成品 CSV / 纯中文 txt =====
@@ -198,14 +217,19 @@ export function validateRowsHtmlTags(
     const dst = htmlTags(row.trans)
     if (src.join('\u0000') !== dst.join('\u0000')) {
       errors.push(
-        `第 ${i + 2} 行标签不一致：原文[${src.join(' ')}] 译文[${dst.join(' ')}]`
+        `第 ${i + 2} 行标签不一致：原文[${src.join(' ')}] 译文[${dst.join(
+          ' '
+        )}]`
       )
     }
   })
   return errors
 }
 
-export function validateTextHtmlTags(rawTxt: string, outputTxt: string): string[] {
+export function validateTextHtmlTags(
+  rawTxt: string,
+  outputTxt: string
+): string[] {
   const src = htmlTags(rawTxt)
   const dst = htmlTags(outputTxt)
   return src.join('\u0000') === dst.join('\u0000')
@@ -297,7 +321,11 @@ export function myStatusOf(
     if (tr.state === '完成')
       return { activeRole: 'pr', blocked: false, blockMsg: '' }
     // 认领了校对但翻译未完成 → 只读
-    return { activeRole: null, blocked: true, blockMsg: '翻译尚未完成，暂不能校对' }
+    return {
+      activeRole: null,
+      blocked: true,
+      blockMsg: '翻译尚未完成，暂不能校对',
+    }
   }
   if (role === 'tr') return asTr()
   if (role === 'pr') return asPr()
@@ -318,7 +346,8 @@ export function docFromIssue(i: any): DocTask {
     paths,
     rawPath: markerPath(i.body, 'raw_path') || `raw_txt/${i.title}.txt`,
     aiPath:
-      markerPath(i.body, 'ai_path') || stagePathFromAny(legacy, i.title, 'ai_csv'),
+      markerPath(i.body, 'ai_path') ||
+      stagePathFromAny(legacy, i.title, 'ai_csv'),
     translatedPath:
       markerPath(i.body, 'translated_path') ||
       stagePathFromAny(legacy, i.title, 'translated_csv'),
@@ -353,6 +382,24 @@ export async function restoreIssue(wrapper: any, issueNumber: number) {
   await wrapper.updateIssue(WORK_OWNER, WORK_REPO, issueNumber, {
     labels,
     state: 'open',
+  })
+}
+
+export async function updateTracks(
+  wrapper: any,
+  issueNumber: number,
+  tr: Track,
+  pr: Track
+) {
+  const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, issueNumber)
+  let body = setTrackInBody(issue.body, 'tr', tr)
+  body = setTrackInBody(body, 'pr', pr)
+  const done = tr.state === '完成' && pr.state === '完成'
+  const archived = issueLabelNames(issue).includes(ARCHIVED_LABEL)
+  await wrapper.updateIssue(WORK_OWNER, WORK_REPO, issueNumber, {
+    body,
+    assignees: assigneesOf(tr, pr),
+    state: archived ? issue.state : done ? 'closed' : 'open',
   })
 }
 

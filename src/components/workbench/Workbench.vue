@@ -11,7 +11,9 @@
 
     <template v-else>
       <div class="toolbar">
-        <n-button size="small" :loading="loading" @click="refresh">刷新</n-button>
+        <n-button size="small" :loading="loading" @click="refresh"
+          >刷新</n-button
+        >
         <span class="me">我：{{ displayUser(me) }}</span>
         <n-checkbox v-model:checked="onlyMine">只看我的</n-checkbox>
       </div>
@@ -44,10 +46,17 @@
             </td>
             <td>
               <div class="cell">
-                <n-tag size="small" :type="tagType(d.tr.state)" :bordered="false">
+                <n-tag
+                  size="small"
+                  :type="tagType(d.tr.state)"
+                  :bordered="false"
+                >
                   {{ trackLabel(d.tr) }}
                 </n-tag>
-                <n-button size="tiny" @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')">
+                <n-button
+                  size="tiny"
+                  @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')"
+                >
                   下载AI机翻CSV
                 </n-button>
                 <n-button
@@ -73,7 +82,9 @@
               <div class="cell">
                 <n-tag
                   size="small"
-                  :type="d.tr.state === '完成' ? tagType(d.pr.state) : 'default'"
+                  :type="
+                    d.tr.state === '完成' ? tagType(d.pr.state) : 'default'
+                  "
                   :bordered="false"
                 >
                   {{ prCellLabel(d) }}
@@ -122,7 +133,7 @@ import { NButton, NTag, NEmpty, NAlert, NCheckbox } from 'naive-ui'
 import { store } from '../../store'
 import PushHeader from '../translate/push/PushHeader.vue'
 import FileSaver from 'file-saver'
-import { displayUser } from '../../helper/users'
+import { displayUser, loadUsers } from '../../helper/users'
 import {
   WORK_OWNER,
   WORK_REPO,
@@ -174,6 +185,7 @@ async function refresh() {
   loading.value = true
   error.value = ''
   try {
+    await loadUsers(store.octokitWrapper)
     const issues = await store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO)
     docs.value = (issues as any[])
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
@@ -248,6 +260,12 @@ watch(
 onMounted(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
+</script>
+
+<script lang="ts">
+export default {
+  name: 'WorkbenchPanel',
+}
 </script>
 
 <style scoped>
