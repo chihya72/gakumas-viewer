@@ -4,6 +4,8 @@ import vue from '@vitejs/plugin-vue'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // GitHub Pages 子路径部署时由 CI 设 PAGES_BASE=/gakumas-viewer/；本地 dev 不受影响
+  base: process.env.PAGES_BASE || '/',
   plugins: [
     vue(),
     VitePWA({

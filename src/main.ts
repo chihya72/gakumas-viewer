@@ -22,7 +22,8 @@ const Admin = () => import('./components/workbench/Admin.vue')
 
 // create a new router instance
 const router = createRouter({
-  history: createWebHistory(),
+  // BASE_URL 由 vite base 注入：本地 '/'，Pages '/gakumas-viewer/'
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     // define your routes here
     {
