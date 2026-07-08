@@ -2,7 +2,7 @@
 
 <script setup lang="ts">
 import { onMounted, watch, computed } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   NSelect,
@@ -11,7 +11,6 @@ import {
   NAlert,
 } from 'naive-ui'
 
-const route = useRoute()
 const { locale, availableLocales, t } = useI18n()
 
 const showAlert = computed(() => {
@@ -45,19 +44,12 @@ watch(locale, (newVal) => {
         </n-alert> -->
         <div class="first-line">
           <nav>
-            <!-- 工作台/剧情浏览/关于用干净路径，不拖带编辑器的 source/issue/role/hash -->
+            <!-- 工作台页面用干净路径，不拖带编辑器的 source/issue/role/hash -->
             <router-link :to="{ path: '/' }">工作台</router-link>
             |
             <router-link :to="{ path: '/history' }">已完成</router-link>
             |
             <router-link :to="{ path: '/archive' }">存档</router-link>
-            |
-            <router-link
-              :to="{ path: '/translate', query: route.query, hash: route.hash }"
-              >{{ t('tab.Translate') }}</router-link
-            >
-            |
-            <router-link :to="{ path: '/browse' }">剧情浏览</router-link>
             |
             <router-link :to="{ path: '/about' }">{{
               t('tab.About')
