@@ -3,7 +3,7 @@
 <template>
   <div class="workbench">
     <push-header title="汉化工作台" />
-    <div class="build-mark">构建标记 B18（若看不到此行=仍是旧缓存）</div>
+    <div class="build-mark">构建标记 B19（若看不到此行=仍是旧缓存）</div>
 
     <div v-if="!store.octokitWrapper?.userMeta" class="hint">
       请先登录 GitHub 账号（需已加入工作组，即对工作仓库有写权限）。
@@ -11,7 +11,7 @@
 
     <template v-else>
       <div class="toolbar">
-        <n-button size="small" :loading="loading" @click="refresh"
+        <n-button size="small" :loading="loading" @click="refresh()"
           >刷新</n-button
         >
         <span class="me">我：{{ displayUser(me) }}</span>
@@ -42,10 +42,7 @@
         <thead>
           <tr>
             <th class="sel-col">
-              <n-checkbox
-                :checked="allSelected"
-                @update:checked="toggleAll"
-              />
+              <n-checkbox :checked="allSelected" @update:checked="toggleAll" />
             </th>
             <th>剧情</th>
             <th>翻译</th>
@@ -66,7 +63,7 @@
             <!-- 翻译轨：第一行=状态+时间，第二行=功能按钮 -->
             <td>
               <div class="cell-col">
-                <div class="cell-line">
+                <div class="cell-line status-line">
                   <n-tag
                     size="small"
                     :type="tagType(d.tr.state)"
@@ -78,12 +75,12 @@
                     formatGmt8(d.trCsvTime)
                   }}</span>
                 </div>
-                <div class="cell-line">
+                <div class="cell-line action-line">
                   <n-button
                     size="tiny"
                     @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')"
                   >
-                    下载AI机翻CSV
+                    AI机翻CSV
                   </n-button>
                   <n-button
                     v-if="d.tr.state === '待认领'"
@@ -95,13 +92,13 @@
                     认领
                   </n-button>
                   <n-button
-                    v-if="d.tr.state === '待认领'"
+                    v-if="canAiComplete(d)"
                     size="tiny"
                     type="warning"
                     :loading="busy === d.number"
                     @click="aiComplete(d)"
                   >
-                    一键完成翻译
+                    采用AI稿
                   </n-button>
                   <n-button
                     v-if="d.tr.user === me && d.tr.state === '进行中'"
@@ -109,7 +106,7 @@
                     type="primary"
                     @click="open(d, 'tr')"
                   >
-                    开始在线翻译
+                    开始翻译
                   </n-button>
                   <n-button
                     v-if="d.tr.state === '完成'"
@@ -124,7 +121,7 @@
             <!-- 校对轨：可随时认领；翻译未完成时不能开始校对 -->
             <td>
               <div class="cell-col">
-                <div class="cell-line">
+                <div class="cell-line status-line">
                   <n-tag
                     size="small"
                     :type="
@@ -138,13 +135,13 @@
                     formatGmt8(d.prCsvTime)
                   }}</span>
                 </div>
-                <div class="cell-line">
+                <div class="cell-line action-line">
                   <n-button
+                    v-if="d.tr.state === '完成'"
                     size="tiny"
-                    :disabled="d.tr.state !== '完成'"
                     @click="downloadCsvPath(d.translatedPath, d.title, '翻译')"
                   >
-                    下载人工翻译CSV
+                    人工翻译CSV
                   </n-button>
                   <n-button
                     v-if="d.pr.state === '待认领'"
@@ -165,7 +162,7 @@
                     type="primary"
                     @click="open(d, 'pr')"
                   >
-                    开始在线校对
+                    开始校对
                   </n-button>
                 </div>
               </div>
@@ -179,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onActivated, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NTag, NEmpty, NAlert, NCheckbox } from 'naive-ui'
 import { store } from '../../store'
@@ -209,11 +206,16 @@ const batchBusy = ref(false)
 const error = ref('')
 const onlyMine = ref(false)
 const docs = ref<DocTask[]>([])
+const autoRefresh = () => {
+  if (!busy.value && !batchBusy.value) refresh(false)
+}
 // 多选（批量认领用）
 const selected = ref<Set<number>>(new Set())
 
 const allSelected = computed(
-  () => rows.value.length > 0 && rows.value.every((d) => selected.value.has(d.number))
+  () =>
+    rows.value.length > 0 &&
+    rows.value.every((d) => selected.value.has(d.number))
 )
 function toggleSel(n: number, v: boolean) {
   const s = new Set(selected.value)
@@ -256,7 +258,7 @@ async function aiComplete(d: DocTask) {
   if (!confirm(`直接采用 AI 机翻稿作为 ${d.title} 的翻译成稿？`)) return
   busy.value = d.number
   try {
-    await aiCompleteTranslation(store.octokitWrapper, d)
+    await aiCompleteTranslation(store.octokitWrapper, d, me.value)
     await refresh()
   } catch (e: any) {
     alert(`一键完成失败：${e?.message || e}`)
@@ -272,6 +274,15 @@ function isMine(d: DocTask) {
 const rows = computed(() =>
   onlyMine.value ? docs.value.filter(isMine) : docs.value
 )
+
+function canAiComplete(d: DocTask) {
+  return (
+    d.tr.state === '待认领' &&
+    !d.tr.user &&
+    !!d.pr.user &&
+    d.pr.user === me.value
+  )
+}
 
 function tagType(s: TrackState) {
   return s === '完成' ? 'success' : s === '进行中' ? 'warning' : 'default'
@@ -289,27 +300,36 @@ function prCellLabel(d: DocTask) {
   }`
 }
 
-async function refresh() {
+async function refresh(includeTimes = true) {
   if (!store.octokitWrapper) return
+  if (loading.value) return
   loading.value = true
   error.value = ''
   try {
-    await loadUsers(store.octokitWrapper)
+    if (includeTimes) await loadUsers(store.octokitWrapper)
     const issues = await store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO)
+    const oldTimes = new Map(docs.value.map((d) => [d.number, d]))
     docs.value = (issues as any[])
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
-      .sort((a, b) => a.title.localeCompare(b.title))
-    // 异步补每行 翻译/校对 CSV 的最后 commit 时间（有对应阶段产物才拉）
-    const w = store.octokitWrapper
-    await Promise.all(
-      docs.value.map(async (d) => {
-        if (d.tr.state === '完成')
-          d.trCsvTime = await fileCommitTime(w, d.translatedPath)
-        if (d.pr.state === '完成')
-          d.prCsvTime = await fileCommitTime(w, d.proofreadPath)
+      .map((d) => {
+        if (includeTimes) return d
+        const old = oldTimes.get(d.number)
+        return { ...d, trCsvTime: old?.trCsvTime, prCsvTime: old?.prCsvTime }
       })
-    )
+      .sort((a, b) => a.title.localeCompare(b.title))
+    if (includeTimes) {
+      // 手动/首次刷新才补 commit 时间；自动刷新只拉 issue 状态，避免页面越刷越慢。
+      const w = store.octokitWrapper
+      await Promise.all(
+        docs.value.map(async (d) => {
+          if (d.tr.state === '完成')
+            d.trCsvTime = await fileCommitTime(w, d.translatedPath)
+          if (d.pr.state === '完成')
+            d.prCsvTime = await fileCommitTime(w, d.proofreadPath)
+        })
+      )
+    }
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}（确认工作仓库存在且有权限）`
   }
@@ -366,6 +386,7 @@ watch(
 onMounted(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
+onActivated(autoRefresh)
 </script>
 
 <script lang="ts">
@@ -376,7 +397,7 @@ export default {
 
 <style scoped>
 .workbench {
-  max-width: 860px;
+  max-width: 980px;
   margin: 0 auto;
   text-align: left;
 }
@@ -393,6 +414,7 @@ export default {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
   margin: 10px 0;
 }
 .me {
@@ -407,8 +429,9 @@ export default {
 .grid th,
 .grid td {
   border-bottom: 1px solid #eee;
-  padding: 7px 8px;
+  padding: 10px 12px;
   text-align: left;
+  vertical-align: top;
 }
 .grid th {
   color: #888;
@@ -417,6 +440,13 @@ export default {
 }
 .sel-col {
   width: 34px;
+}
+.grid th:nth-child(2) {
+  width: 34%;
+}
+.grid th:nth-child(3),
+.grid th:nth-child(4) {
+  width: 31%;
 }
 .grid tr.mine {
   background: #f6fbff;
@@ -433,13 +463,20 @@ export default {
 .cell-col {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 7px;
+  min-height: 54px;
 }
 .cell-line {
   display: flex;
   gap: 6px;
   align-items: center;
   flex-wrap: wrap;
+}
+.status-line {
+  min-height: 22px;
+}
+.action-line :deep(.n-button) {
+  min-width: 68px;
 }
 .time {
   color: #999;

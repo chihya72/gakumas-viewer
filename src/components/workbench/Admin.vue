@@ -196,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onActivated, onMounted, ref, watch } from 'vue'
 import { NAlert, NButton, NEmpty, NInput, NSelect } from 'naive-ui'
 import PushHeader from '../translate/push/PushHeader.vue'
 import { store } from '../../store'
@@ -294,6 +294,7 @@ function toggleSelected(n: number, e: Event) {
 
 async function refresh() {
   if (!store.octokitWrapper) return
+  if (loading.value) return
   loading.value = true
   error.value = ''
   try {
@@ -455,6 +456,9 @@ watch(
   }
 )
 onMounted(() => {
+  if (store.octokitWrapper?.userMeta) refresh()
+})
+onActivated(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
 </script>

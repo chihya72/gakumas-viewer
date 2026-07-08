@@ -27,7 +27,7 @@ import {
   Download,
   // Share,
 } from '@vicons/carbon'
-import { ref, onMounted, nextTick, computed, watch, h } from 'vue'
+import { ref, onActivated, onMounted, nextTick, computed, watch, h } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -157,7 +157,11 @@ const isWorkFile = computed(() => {
     return false
   }
 })
-const workStatus = ref<MyStatus>({ activeRole: null, blocked: false, blockMsg: '' })
+const workStatus = ref<MyStatus>({
+  activeRole: null,
+  blocked: false,
+  blockMsg: '',
+})
 const workStatusLoaded = ref(false)
 async function loadWorkStatus() {
   workStatus.value = { activeRole: null, blocked: false, blockMsg: '' }
@@ -284,6 +288,7 @@ onMounted(() => {
   loadDataFromLocation()
   loadWorkStatus()
 })
+onActivated(loadWorkStatus)
 // if this page has been loaded for once, use watch to detect when to reload
 // currently, the reload flag is used when clicking a history save at home page
 watch(routeQuery, async (newQuery) => {

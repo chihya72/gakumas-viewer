@@ -31,9 +31,7 @@
           >纯中文TXT</n-button
         >
         <!-- 重新翻译对所有登录用户常开（再次完成覆盖阶段目录、译者更新为重做者）；校对仍限本人 -->
-        <n-button size="tiny" @click="openEditor(d, 'tr')">
-          重新翻译
-        </n-button>
+        <n-button size="tiny" @click="openEditor(d, 'tr')">重新翻译</n-button>
         <n-button
           v-if="me && d.pr.user === me"
           size="tiny"
@@ -48,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onActivated, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NTag, NEmpty, NAlert } from 'naive-ui'
 import FileSaver from 'file-saver'
@@ -89,6 +87,7 @@ function openEditor(d: DocTask, role: TrackKey) {
 
 async function refresh() {
   if (!store.octokitWrapper) return
+  if (loading.value) return
   loading.value = true
   error.value = ''
   try {
@@ -156,6 +155,9 @@ watch(
   }
 )
 onMounted(() => {
+  if (store.octokitWrapper?.userMeta) refresh()
+})
+onActivated(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
 </script>

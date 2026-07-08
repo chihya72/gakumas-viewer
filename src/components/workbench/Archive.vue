@@ -31,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onActivated, onMounted, watch } from 'vue'
 import { NButton, NTag, NEmpty, NAlert } from 'naive-ui'
 import PushHeader from '../translate/push/PushHeader.vue'
 import { store } from '../../store'
@@ -57,6 +57,7 @@ function trackText(t: Track) {
 
 async function refresh() {
   if (!store.octokitWrapper) return
+  if (loading.value) return
   loading.value = true
   error.value = ''
   try {
@@ -97,6 +98,9 @@ watch(
   }
 )
 onMounted(() => {
+  if (store.octokitWrapper?.userMeta) refresh()
+})
+onActivated(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
 </script>

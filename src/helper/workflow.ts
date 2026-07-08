@@ -68,8 +68,17 @@ export async function fileCommitTime(
 // 只改 issue body，不动 assignees（AI 名不是 GitHub 用户，不能 assign）
 export async function aiCompleteTranslation(
   wrapper: any,
-  doc: { number: number; aiPath: string; translatedPath: string }
+  doc: { number: number; aiPath: string; translatedPath: string },
+  me: string
 ): Promise<void> {
+  const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, doc.number)
+  const tr = parseTrack(issue.body, 'tr')
+  const pr = parseTrack(issue.body, 'pr')
+  if (tr.user || tr.state !== '待认领' || !pr.user || pr.user !== me) {
+    throw new Error(
+      '只有已认领校对、且翻译无人认领时，校对本人才能采用 AI 机翻稿'
+    )
+  }
   const src = await wrapper.getContent(
     WORK_OWNER,
     WORK_REPO,
@@ -97,7 +106,6 @@ export async function aiCompleteTranslation(
     `一键完成翻译(AI) ${doc.translatedPath}`,
     b64
   )
-  const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, doc.number)
   const body = setTrackInBody(issue.body, 'tr', {
     user: aiName,
     state: '完成',
@@ -409,7 +417,8 @@ export function myStatusOf(
     // 重新翻译常开：翻译轨已完成时，任何登录用户显式带 role=tr 进来都可重做
     // （再次完成会覆盖 translated_csv，译者更新为重做者）
     if (tr.state === '完成') {
-      if (role === 'tr') return { activeRole: 'tr', blocked: false, blockMsg: '' }
+      if (role === 'tr')
+        return { activeRole: 'tr', blocked: false, blockMsg: '' }
       return tr.user === me ? done : none
     }
     if (tr.user !== me) return none
