@@ -52,6 +52,17 @@ export async function saveUsers(wrapper: any, next: Record<string, WorkUser>) {
   Object.assign(users, next)
 }
 
+export async function saveMyName(wrapper: any, github: string, name: string) {
+  await loadUsers(wrapper)
+  await saveUsers(wrapper, {
+    ...users,
+    [github]: {
+      name: name.trim() || github,
+      role: users[github]?.role || 'user',
+    },
+  })
+}
+
 export function displayUser(user: string): string {
   return users[user]?.name || user
 }

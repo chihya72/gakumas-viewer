@@ -102,6 +102,20 @@ export function stagePath(
   return d.proofreadPath
 }
 
+export function stagePathForTitle(
+  title: string,
+  stage: 'ai' | 'translated' | 'proofread'
+) {
+  return csvPathFromTitle(
+    title,
+    stage === 'ai'
+      ? 'ai_csv'
+      : stage === 'translated'
+      ? 'translated_csv'
+      : 'proofread_csv'
+  )
+}
+
 export function completionPath(
   sourcePath: string,
   title: string,
@@ -383,6 +397,50 @@ export async function restoreIssue(wrapper: any, issueNumber: number) {
     labels,
     state: 'open',
   })
+}
+
+export async function createWorkIssue(
+  wrapper: any,
+  title: string,
+  stage: 'ai' | 'translated' | 'proofread',
+  owner = ''
+) {
+  const aiPath = stagePathForTitle(title, 'ai')
+  const translatedPath = stagePathForTitle(title, 'translated')
+  const proofreadPath = stagePathForTitle(title, 'proofread')
+  const tr: Track = {
+    user: stage === 'ai' ? '' : owner,
+    state: stage === 'ai' ? '待认领' : '完成',
+  }
+  const pr: Track = {
+    user: stage === 'proofread' ? owner : '',
+    state: stage === 'proofread' ? '完成' : '待认领',
+  }
+  const body = [
+    `<!-- raw_path: raw_txt/${title}.txt -->`,
+    `<!-- ai_path: ${aiPath} -->`,
+    `<!-- translated_path: ${translatedPath} -->`,
+    `<!-- proofread_path: ${proofreadPath} -->`,
+    setTrackInBody('', 'tr', tr),
+    setTrackInBody('', 'pr', pr),
+  ].join('\n')
+  const { data: issue } = await wrapper.request(
+    'POST /repos/{owner}/{repo}/issues',
+    {
+      owner: WORK_OWNER,
+      repo: WORK_REPO,
+      title,
+      body,
+      assignees: assigneesOf(tr, pr),
+      headers: wrapper.headers,
+    }
+  )
+  if (stage === 'proofread') {
+    await wrapper.updateIssue(WORK_OWNER, WORK_REPO, issue.number, {
+      state: 'closed',
+    })
+  }
+  return issue
 }
 
 export async function updateTracks(
