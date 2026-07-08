@@ -517,7 +517,8 @@ async function metaInfoFromGithubCsvUrl(
   url: string
 ): Promise<CommunicationDataMeta> {
   url = getGithubRawResourcePath(url)
-  const response = await fetch(url)
+  const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}`
+  const response = await fetch(fetchUrl, { cache: 'no-store' })
 
   if (!response.ok) {
     alert('load failed')

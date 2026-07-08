@@ -360,9 +360,10 @@ export default defineComponent({
       // using the "local_trans" property of each item
       const lines = this.$refs.lines as InstanceType<typeof DialogueLine>[]
       const updatedData = this.data.map((item, index) => {
+        const line = lines[index]
         return {
           ...item,
-          trans: lines[index].local_trans,
+          trans: line.isEditing ? line.edit_trans : line.local_trans,
         }
       })
 
@@ -372,7 +373,9 @@ export default defineComponent({
 
       return toCsvText({
         data: updatedData,
-        translator: translatorLine.local_trans,
+        translator: translatorLine.isEditing
+          ? translatorLine.edit_trans
+          : translatorLine.local_trans,
         jsonUrl: this.jsonUrl,
       })
     },
