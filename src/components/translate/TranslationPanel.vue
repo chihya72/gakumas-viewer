@@ -881,6 +881,7 @@ const currentDialogueCount = computed(() => {
   /* flex: 8; */
   align-items: center;
   text-align: left;
+  min-width: 0;
 }
 
 /* .input-row > .url-input {
@@ -915,6 +916,7 @@ const currentDialogueCount = computed(() => {
   color: black;
   cursor: pointer;
   flex: 3;
+  min-width: 0;
 }
 
 .clickable {
@@ -943,10 +945,44 @@ const currentDialogueCount = computed(() => {
   background-color: white;
   /* background: linear-gradient(to bottom, rgb(233, 245, 65), 2%, white);; */
   /* background-color: #f5f5f5; */
-  padding: 10px;
+  padding: 10px max(10px, env(safe-area-inset-right))
+    calc(10px + env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  z-index: 30;
 }
 
 .explanation {
   font-size: 0.9em;
+}
+
+@media (max-width: 720px) {
+  .input-row {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .url-input {
+    width: 100%;
+  }
+
+  .file-selector {
+    width: 100%;
+  }
+
+  .toolbar {
+    overflow-x: auto;
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .toolbar :deep(.n-space) {
+    flex-wrap: nowrap !important;
+  }
+
+  .clickable {
+    min-width: 58px;
+    min-height: 44px;
+    text-align: center;
+  }
 }
 </style>

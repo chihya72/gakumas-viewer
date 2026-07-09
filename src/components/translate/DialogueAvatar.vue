@@ -1,11 +1,7 @@
 <template>
   <!-- the "avatar" element displays the avatar image -->
   <div v-if="name" class="avatar">
-    <img
-      :src="avatarUrl"
-      :alt="name"
-      @error="onAvatarError"
-    />
+    <img :src="avatarUrl" :alt="name" @error="onAvatarError" />
   </div>
 </template>
 
@@ -49,5 +45,15 @@ img {
 
 .avatar {
   padding: 10px 10px 10px 0px;
+}
+
+@media (max-width: 720px) {
+  img {
+    width: 64px;
+  }
+
+  .avatar {
+    padding-right: 8px;
+  }
 }
 </style>

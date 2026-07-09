@@ -121,7 +121,7 @@ export default {
 
 <style scoped>
 .workbench {
-  width: min(1170px, calc(100vw - 48px));
+  width: min(1170px, 100%);
   max-width: 1170px;
   margin: 0 auto;
   text-align: left;
@@ -160,5 +160,33 @@ export default {
   color: #64748b;
   font-size: 12px;
   white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .row {
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.82);
+    margin-bottom: 10px;
+  }
+
+  .source-time,
+  .title,
+  .user {
+    grid-column: 1 / -1;
+  }
+
+  .title,
+  .user {
+    white-space: normal;
+  }
+
+  .row :deep(.n-button) {
+    width: 100%;
+    min-height: 36px;
+  }
 }
 </style>

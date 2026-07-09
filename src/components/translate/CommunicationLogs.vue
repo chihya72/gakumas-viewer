@@ -501,7 +501,7 @@ export default defineComponent({
 .communication {
   width: 100%;
   max-width: 720px;
-  height: 80vh;
+  min-height: 80dvh;
 }
 
 .scroll {
@@ -527,5 +527,26 @@ export default defineComponent({
   box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
   border-radius: 10px;
   background: #ededed;
+}
+
+@media (max-width: 720px) {
+  .container {
+    align-items: stretch;
+  }
+
+  .jump {
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .jump :deep(.n-button-group) {
+    flex: 0 0 auto;
+  }
+
+  .communication {
+    max-width: none;
+    min-height: calc(100dvh - 190px);
+  }
 }
 </style>

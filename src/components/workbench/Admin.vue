@@ -652,4 +652,39 @@ h3 {
   word-break: break-all;
   font-weight: 600;
 }
+
+@media (max-width: 720px) {
+  .profile,
+  .upload,
+  .section-head,
+  .batch-actions {
+    align-items: stretch;
+  }
+
+  .profile .n-input,
+  .upload .n-input,
+  .upload .n-select {
+    max-width: none;
+    width: 100%;
+  }
+
+  .profile :deep(.n-button),
+  .upload :deep(.n-button),
+  .user-actions :deep(.n-button),
+  .batch-actions :deep(.n-button) {
+    min-height: 36px;
+  }
+
+  .section-head {
+    display: block;
+  }
+
+  .users {
+    min-width: 520px;
+  }
+
+  .docs {
+    min-width: 860px;
+  }
+}
 </style>

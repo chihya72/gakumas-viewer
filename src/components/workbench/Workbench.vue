@@ -442,7 +442,9 @@ async function downloadCsvPath(path: string, title: string, label: string) {
       true
     )
     FileSaver.saveAs(
-      new Blob([base64ToUtf8(file.content)], { type: 'text/csv;charset=utf-8' }),
+      new Blob([base64ToUtf8(file.content)], {
+        type: 'text/csv;charset=utf-8',
+      }),
       `${title}_${label}.csv`
     )
   } catch (e: any) {
@@ -537,7 +539,9 @@ async function uploadCsv(d: DocTask, role: TrackKey, file: File) {
     alert(`${label}CSV上传完成`)
   } catch (e: any) {
     const msg = e?.message || e
-    alert(String(msg).includes('禁止上传') ? msg : `${label}CSV上传失败：${msg}`)
+    alert(
+      String(msg).includes('禁止上传') ? msg : `${label}CSV上传失败：${msg}`
+    )
   }
   busy.value = null
   busyText.value = ''
@@ -601,7 +605,7 @@ export default {
 
 <style scoped>
 .workbench {
-  width: min(1400px, calc(100vw - 48px));
+  width: min(1400px, 100%);
   max-width: 1170px;
   margin: 0 auto;
   text-align: left;
@@ -629,16 +633,17 @@ export default {
   font-size: 14px;
 }
 .table-scroll {
-  overflow-x: hidden;
+  overflow-x: auto;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
+  -webkit-overflow-scrolling: touch;
 }
 .grid {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  min-width: 0;
+  min-width: 760px;
   font-size: 14px;
 }
 .grid th,
@@ -763,5 +768,131 @@ export default {
   color: #64748b;
   font-size: 12px;
   white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .toolbar {
+    gap: 8px;
+  }
+
+  .toolbar :deep(.n-button) {
+    min-height: 36px;
+  }
+
+  .me {
+    flex-basis: 100%;
+  }
+
+  .table-scroll {
+    overflow-x: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .grid,
+  .grid tbody,
+  .grid tr,
+  .grid td {
+    display: block;
+  }
+
+  .grid colgroup,
+  .grid thead {
+    display: none;
+  }
+
+  .grid {
+    min-width: 0;
+  }
+
+  .grid td {
+    min-width: 0;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .grid tr {
+    display: grid;
+    grid-template-columns: auto minmax(84px, max-content) minmax(0, 1fr);
+    gap: 8px 10px;
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.86);
+  }
+
+  .grid tr.mine {
+    background: #eff6ff;
+  }
+
+  .grid td.sel-col {
+    grid-column: 1;
+    grid-row: 1;
+    width: 34px;
+    align-self: center;
+  }
+
+  .grid td.source-time {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    font-size: 11px;
+  }
+
+  .grid td.doc {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .doc a {
+    line-height: 1.45;
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  .grid td:nth-child(4),
+  .grid td:nth-child(5) {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .grid td:nth-child(4)::before,
+  .grid td:nth-child(5)::before {
+    color: #64748b;
+    font-size: 12px;
+    line-height: 32px;
+  }
+
+  .grid td:nth-child(4)::before {
+    content: '翻译';
+  }
+
+  .grid td:nth-child(5)::before {
+    content: '校对';
+  }
+
+  .track-line {
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 6px;
+    width: 100%;
+    white-space: normal;
+  }
+
+  .status-tag,
+  .track-line :deep(.n-button) {
+    width: 100%;
+  }
+
+  .time {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 </style>

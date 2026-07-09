@@ -94,6 +94,7 @@ watch(locale, (newVal) => {
 .app-shell {
   min-height: 100dvh;
   padding: 16px;
+  overflow-x: hidden;
 }
 
 .app-header {
@@ -155,26 +156,47 @@ watch(locale, (newVal) => {
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 10px;
+    padding: 8px;
   }
 
   .app-header {
     position: static;
-    align-items: stretch;
-    flex-direction: column;
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 8px;
+    margin-bottom: 12px;
     padding: 12px;
   }
 
+  .brand {
+    flex: 1 1 calc(100% - 96px);
+    min-height: 34px;
+    line-height: 34px;
+  }
+
   .app-nav {
+    order: 3;
+    flex-basis: 100%;
     justify-content: flex-start;
+    gap: 6px;
     overflow-x: auto;
-    padding-bottom: 2px;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .app-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-nav a {
+    flex: 0 0 auto;
+    padding: 0 10px;
   }
 
   .locale-changer {
-    flex-basis: auto;
-    width: 100%;
+    flex: 0 0 86px;
   }
 }
 </style>
