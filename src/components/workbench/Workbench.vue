@@ -79,6 +79,7 @@
                 </div>
                 <div class="cell-line action-line">
                   <n-button
+                    class="neutral-action"
                     size="tiny"
                     @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')"
                   >
@@ -112,6 +113,7 @@
                   </n-button>
                   <n-button
                     v-if="d.tr.state === '完成'"
+                    class="neutral-action"
                     size="tiny"
                     @click="open(d, 'tr')"
                   >
@@ -142,6 +144,7 @@
                 <div class="cell-line action-line">
                   <n-button
                     v-if="d.tr.state === '完成'"
+                    class="neutral-action"
                     size="tiny"
                     @click="downloadCsvPath(d.translatedPath, d.title, '翻译')"
                   >
@@ -493,14 +496,14 @@ export default {
 }
 .status-line {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 86px;
+  grid-template-columns: 104px 86px;
   column-gap: 10px;
   align-items: center;
   min-height: 22px;
 }
 .status-tag {
   justify-self: start;
-  max-width: 100%;
+  width: 104px;
   min-width: 0;
 }
 .status-tag :deep(.n-tag__content) {
@@ -516,6 +519,17 @@ export default {
 }
 .action-line :deep(.n-button) {
   width: 100%;
+}
+.neutral-action {
+  --n-color: #f3f3f5 !important;
+  --n-color-hover: #f7f7f9 !important;
+  --n-color-pressed: #e9eaee !important;
+  --n-border: 1px solid #e5e7eb !important;
+  --n-border-hover: 1px solid #d9dce3 !important;
+  --n-border-pressed: 1px solid #cfd3dc !important;
+  --n-text-color: #111827 !important;
+  --n-text-color-hover: #111827 !important;
+  --n-text-color-pressed: #111827 !important;
 }
 .action-spacer {
   width: 104px;
