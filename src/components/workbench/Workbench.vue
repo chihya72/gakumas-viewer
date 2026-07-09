@@ -69,6 +69,7 @@
                     size="small"
                     :type="tagType(d.tr.state)"
                     :bordered="false"
+                    :title="trackLabel(d.tr)"
                   >
                     {{ trackLabel(d.tr) }}
                   </n-tag>
@@ -130,6 +131,7 @@
                       d.tr.state === '完成' ? tagType(d.pr.state) : 'default'
                     "
                     :bordered="false"
+                    :title="prCellLabel(d)"
                   >
                     {{ prCellLabel(d) }}
                   </n-tag>
@@ -407,7 +409,7 @@ export default {
 
 <style scoped>
 .workbench {
-  max-width: 980px;
+  max-width: 1120px;
   margin: 0 auto;
   text-align: left;
 }
@@ -452,11 +454,24 @@ export default {
   width: 34px;
 }
 .grid th:nth-child(2) {
-  width: 34%;
+  width: 36%;
 }
 .grid th:nth-child(3),
 .grid th:nth-child(4) {
-  width: 31%;
+  width: 30%;
+}
+.grid th:nth-child(2),
+.grid td:nth-child(2) {
+  padding-right: 28px;
+}
+.grid th:nth-child(3),
+.grid td:nth-child(3) {
+  padding-left: 24px;
+  padding-right: 34px;
+}
+.grid th:nth-child(4),
+.grid td:nth-child(4) {
+  padding-left: 24px;
 }
 .grid tr.mine {
   background: #f6fbff;
@@ -478,14 +493,20 @@ export default {
 }
 .status-line {
   display: grid;
-  grid-template-columns: minmax(108px, max-content) 86px;
+  grid-template-columns: minmax(0, 1fr) 86px;
   column-gap: 10px;
   align-items: center;
   min-height: 22px;
 }
 .status-tag {
   justify-self: start;
-  max-width: 190px;
+  max-width: 100%;
+  min-width: 0;
+}
+.status-tag :deep(.n-tag__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .action-line {
   display: grid;
