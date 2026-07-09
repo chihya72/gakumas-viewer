@@ -1,53 +1,54 @@
 <template>
-  <n-space align="center">
-    <span> {{ props.title }}</span>
-    <n-popconfirm
-      v-if="!store.octokitWrapper?.userMeta"
-      :positive-text="t('common.confirm')"
-      :negative-text="t('common.cancel')"
-      @positive-click="navToAuth"
-    >
-      <template #trigger>
-        <n-button type="info">
-          <template #icon><LogoGithub /></template>
-          {{ t('push.header.login') }}
-        </n-button>
-      </template>
-      {{ t('push.header.scope') }}
-    </n-popconfirm>
-    <n-button
-      v-if="isAuthorizing"
-      size="medium"
-      secondary
-      type="info"
-      @click="handleVisibilityChangeAfterAuth"
-    >
-      <template #icon>
-        <Renew />
-      </template>
-      {{ t('push.header.refresh') }}
-    </n-button>
-    <n-dropdown
-      v-if="!!store.octokitWrapper?.userMeta"
-      :options="options"
-      @select="handleSelect"
-    >
-      <n-tag class="clickable">
-        <template #avatar>
-          <n-avatar
-            round
-            :src="store.octokitWrapper?.userMeta.avatarUrl"
-          ></n-avatar>
+  <div class="push-header">
+    <h1>{{ props.title }}</h1>
+    <div class="push-header-actions">
+      <n-popconfirm
+        v-if="!store.octokitWrapper?.userMeta"
+        :positive-text="t('common.confirm')"
+        :negative-text="t('common.cancel')"
+        @positive-click="navToAuth"
+      >
+        <template #trigger>
+          <n-button type="info">
+            <template #icon><LogoGithub /></template>
+            {{ t('push.header.login') }}
+          </n-button>
         </template>
-        {{ store.octokitWrapper?.userMeta.username }}
-      </n-tag>
-    </n-dropdown>
-  </n-space>
+        {{ t('push.header.scope') }}
+      </n-popconfirm>
+      <n-button
+        v-if="isAuthorizing"
+        size="medium"
+        secondary
+        type="info"
+        @click="handleVisibilityChangeAfterAuth"
+      >
+        <template #icon>
+          <Renew />
+        </template>
+        {{ t('push.header.refresh') }}
+      </n-button>
+      <n-dropdown
+        v-if="!!store.octokitWrapper?.userMeta"
+        :options="options"
+        @select="handleSelect"
+      >
+        <n-tag class="clickable">
+          <template #avatar>
+            <n-avatar
+              round
+              :src="store.octokitWrapper?.userMeta.avatarUrl"
+            ></n-avatar>
+          </template>
+          {{ store.octokitWrapper?.userMeta.username }}
+        </n-tag>
+      </n-dropdown>
+    </div>
+  </div>
 </template>
 <script setup lang="ts">
 import { ref } from 'vue'
 import {
-  NSpace,
   NTag,
   NAvatar,
   NButton,
@@ -106,5 +107,32 @@ function handleSelect(key: string | number) {
 <style scoped>
 .clickable {
   cursor: pointer;
+}
+.push-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 34px;
+  margin-bottom: 12px;
+}
+.push-header h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1.25;
+}
+.push-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 520px) {
+  .push-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

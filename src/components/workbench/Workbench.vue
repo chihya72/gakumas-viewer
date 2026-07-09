@@ -3,7 +3,6 @@
 <template>
   <div class="workbench">
     <push-header title="汉化工作台" />
-    <div class="build-mark">构建标记 B20（若看不到此行=仍是旧缓存）</div>
 
     <div v-if="!store.octokitWrapper?.userMeta" class="hint">
       请先登录 GitHub 账号（需已加入工作组，即对工作仓库有写权限）。
@@ -38,33 +37,36 @@
 
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
 
-      <table v-if="rows.length" class="grid">
-        <thead>
-          <tr>
-            <th class="sel-col">
-              <n-checkbox :checked="allSelected" @update:checked="toggleAll" />
-            </th>
-            <th>剧情</th>
-            <th>翻译</th>
-            <th>校对</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="d in rows" :key="d.number" :class="{ mine: isMine(d) }">
-            <td class="sel-col">
-              <n-checkbox
-                :checked="selected.has(d.number)"
-                @update:checked="(v: boolean) => toggleSel(d.number, v)"
-              />
-            </td>
-            <td class="doc">
-              <a href="javascript:;" @click="open(d)">{{ d.title }}</a>
-            </td>
-            <!-- 翻译轨：第一行=状态+时间，第二行=功能按钮 -->
-            <td>
-              <div class="cell-col">
-                <div class="cell-line status-line">
+      <div v-if="rows.length" class="table-scroll">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th class="sel-col">
+                <n-checkbox
+                  :checked="allSelected"
+                  @update:checked="toggleAll"
+                />
+              </th>
+              <th>剧情</th>
+              <th>翻译</th>
+              <th>校对</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="d in rows" :key="d.number" :class="{ mine: isMine(d) }">
+              <td class="sel-col">
+                <n-checkbox
+                  :checked="selected.has(d.number)"
+                  @update:checked="(v: boolean) => toggleSel(d.number, v)"
+                />
+              </td>
+              <td class="doc">
+                <a href="javascript:;" @click="open(d)">{{ d.title }}</a>
+              </td>
+              <td>
+                <div class="track-line">
                   <n-tag
+                    v-if="showTrStatus(d)"
                     class="status-tag"
                     size="small"
                     :type="tagType(d.tr.state)"
@@ -73,12 +75,11 @@
                   >
                     {{ trackLabel(d.tr) }}
                   </n-tag>
-                  <span class="time">{{
-                    d.trCsvTime ? formatGmt8(d.trCsvTime) : ''
-                  }}</span>
-                </div>
-                <div class="cell-line action-line">
+                  <span v-if="showTrStatus(d) && d.trCsvTime" class="time">
+                    {{ formatGmt8(d.trCsvTime) }}
+                  </span>
                   <n-button
+                    v-if="showTrDownload(d)"
                     class="neutral-action"
                     size="tiny"
                     @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')"
@@ -112,7 +113,7 @@
                     开始翻译
                   </n-button>
                   <n-button
-                    v-if="d.tr.state === '完成'"
+                    v-if="showTrDownload(d) && d.tr.state === '完成'"
                     class="neutral-action"
                     size="tiny"
                     @click="open(d, 'tr')"
@@ -120,13 +121,11 @@
                     重新翻译
                   </n-button>
                 </div>
-              </div>
-            </td>
-            <!-- 校对轨：可随时认领；翻译未完成时不能开始校对 -->
-            <td>
-              <div class="cell-col">
-                <div class="cell-line status-line">
+              </td>
+              <td>
+                <div class="track-line">
                   <n-tag
+                    v-if="showPrStatus(d)"
                     class="status-tag"
                     size="small"
                     :type="
@@ -137,20 +136,17 @@
                   >
                     {{ prCellLabel(d) }}
                   </n-tag>
-                  <span class="time">{{
-                    d.prCsvTime ? formatGmt8(d.prCsvTime) : ''
-                  }}</span>
-                </div>
-                <div class="cell-line action-line">
+                  <span v-if="showPrStatus(d) && d.prCsvTime" class="time">
+                    {{ formatGmt8(d.prCsvTime) }}
+                  </span>
                   <n-button
-                    v-if="d.tr.state === '完成'"
+                    v-if="showPrDownload(d)"
                     class="neutral-action"
                     size="tiny"
                     @click="downloadCsvPath(d.translatedPath, d.title, '翻译')"
                   >
                     下载翻译CSV
                   </n-button>
-                  <span v-else class="action-spacer"></span>
                   <n-button
                     v-if="d.pr.state === '待认领'"
                     size="tiny"
@@ -173,11 +169,11 @@
                     开始校对
                   </n-button>
                 </div>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <n-empty v-else-if="!loading" description="工作仓库暂无剧情" />
     </template>
   </div>
@@ -301,12 +297,28 @@ function trackLabel(t: DocTask['tr']) {
   return t.user ? `${displayUser(t.user)} · ${t.state}` : '待认领'
 }
 
+function showTrStatus(d: DocTask) {
+  return !isMine(d) || d.tr.state === '待认领'
+}
+
+function showTrDownload(d: DocTask) {
+  return isMine(d) && d.tr.state !== '待认领'
+}
+
 // 校对列显示文案：未认领始终"待认领"；已认领但翻译未完成显示"待校对"
 function prCellLabel(d: DocTask) {
   if (!d.pr.user) return '待认领'
   return `${displayUser(d.pr.user)} · ${
     d.tr.state !== '完成' ? '待校对' : d.pr.state
   }`
+}
+
+function showPrStatus(d: DocTask) {
+  return !isMine(d) || d.pr.state === '待认领' || d.tr.state !== '完成'
+}
+
+function showPrDownload(d: DocTask) {
+  return isMine(d) && d.tr.state === '完成'
 }
 
 async function refresh(includeTimes = true) {
@@ -418,12 +430,7 @@ export default {
 }
 .hint {
   margin: 20px 0;
-  color: #888;
-}
-.build-mark {
-  font-size: 12px;
-  color: #c0392b;
-  margin: 4px 0;
+  color: #64748b;
 }
 .toolbar {
   display: flex;
@@ -433,25 +440,37 @@ export default {
   margin: 10px 0;
 }
 .me {
-  color: #888;
+  color: #64748b;
   font-size: 12px;
+}
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
 }
 .grid {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+  min-width: 860px;
+  font-size: 17px;
 }
 .grid th,
 .grid td {
-  border-bottom: 1px solid #eee;
-  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
+}
+.grid tbody tr:last-child td {
+  border-bottom: 0;
 }
 .grid th {
-  color: #888;
+  color: #64748b;
   font-weight: 500;
   font-size: 13px;
+  background: #f8fafc;
 }
 .sel-col {
   width: 34px;
@@ -459,9 +478,11 @@ export default {
 .grid th:nth-child(2) {
   width: 36%;
 }
-.grid th:nth-child(3),
+.grid th:nth-child(3) {
+  width: 34%;
+}
 .grid th:nth-child(4) {
-  width: 30%;
+  width: 26%;
 }
 .grid th:nth-child(2),
 .grid td:nth-child(2) {
@@ -477,48 +498,56 @@ export default {
   padding-left: 24px;
 }
 .grid tr.mine {
-  background: #f6fbff;
+  background: #eff6ff;
 }
 .doc {
   word-break: break-all;
 }
+.doc a {
+  font-size: 18px;
+  line-height: 30px;
+}
 .doc .parts {
   color: #aaa;
-  font-size: 12px;
+  font-size: 13px;
   margin-left: 6px;
 }
-/* 每轨单元格：第一行 状态+时间，第二行 功能按钮 */
-.cell-col {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-height: 54px;
-}
-.status-line {
+.track-line {
   display: grid;
-  grid-template-columns: 104px 86px;
-  column-gap: 10px;
+  grid-template-columns: 112px 112px;
+  column-gap: 8px;
   align-items: center;
-  min-height: 22px;
+  min-height: 32px;
+  justify-content: start;
 }
 .status-tag {
-  justify-self: start;
-  width: 104px;
+  --n-height: 32px !important;
+  --n-padding: 0 12px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  height: 32px;
   min-width: 0;
+  box-sizing: border-box;
+  text-align: center;
 }
 .status-tag :deep(.n-tag__content) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  font-size: 14px;
+  line-height: 32px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.action-line {
-  display: grid;
-  grid-template-columns: 104px 86px 92px;
-  gap: 6px;
-  align-items: center;
-}
-.action-line :deep(.n-button) {
-  width: 100%;
+.track-line :deep(.n-button) {
+  width: 112px;
+  height: 32px;
+  font-size: 15px;
 }
 .neutral-action {
   --n-color: #f3f3f5 !important;
@@ -531,12 +560,10 @@ export default {
   --n-text-color-hover: #111827 !important;
   --n-text-color-pressed: #111827 !important;
 }
-.action-spacer {
-  width: 104px;
-}
 .time {
   color: #999;
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
+  line-height: 32px;
 }
 </style>

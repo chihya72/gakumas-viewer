@@ -113,13 +113,13 @@ export default {
 
 <style scoped>
 .workbench {
-  max-width: 980px;
+  max-width: 1120px;
   margin: 0 auto;
   text-align: left;
 }
 .hint,
 .user {
-  color: #888;
+  color: #64748b;
 }
 .toolbar {
   margin: 10px 0;
@@ -128,8 +128,9 @@ export default {
   display: flex;
   gap: 8px;
   align-items: center;
-  padding: 7px 0;
-  border-bottom: 1px solid #eee;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
 }
 .title {
   flex: 1;
@@ -138,6 +139,5 @@ export default {
 }
 .user {
   font-size: 12px;
-  white-space: nowrap;
 }
 </style>

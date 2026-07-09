@@ -5,6 +5,12 @@
       请先登录 GitHub。
     </div>
     <template v-else>
+      <div v-if="canAdmin" class="toolbar">
+        <n-button size="small" :loading="loading" @click="refresh"
+          >刷新</n-button
+        >
+      </div>
+
       <h3>我的个人ID</h3>
       <div class="profile">
         <span class="hint">GitHub ID：{{ me }}</span>
@@ -25,29 +31,6 @@
     </template>
 
     <template v-if="store.octokitWrapper?.userMeta && canAdmin">
-      <div class="toolbar">
-        <n-button size="small" :loading="loading" @click="refresh"
-          >刷新</n-button
-        >
-        <n-button
-          size="small"
-          type="primary"
-          :loading="savingUsers"
-          @click="saveUserRows"
-        >
-          保存用户
-        </n-button>
-        <n-button
-          size="small"
-          type="warning"
-          :disabled="!selectedCount"
-          :loading="batching"
-          @click="batchArchive"
-        >
-          批量过时存档({{ selectedCount }})
-        </n-button>
-      </div>
-
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
 
       <h3>上传新文档</h3>
@@ -75,121 +58,159 @@
       </div>
 
       <h3>用户与个人ID</h3>
-      <table class="grid users">
-        <thead>
-          <tr>
-            <th>GitHub ID</th>
-            <th>个人ID</th>
-            <th>权限</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(u, i) in userRows" :key="i">
-            <td><n-input v-model:value="u.github" size="small" /></td>
-            <td><n-input v-model:value="u.name" size="small" /></td>
-            <td>
-              <n-select
-                v-model:value="u.role"
-                size="small"
-                :options="roleOptions"
-              />
-            </td>
-            <td>
-              <n-button size="tiny" @click="userRows.splice(i, 1)"
-                >删除</n-button
-              >
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <n-button size="small" @click="addUser">新增用户</n-button>
+      <div class="table-scroll">
+        <table class="grid users">
+          <thead>
+            <tr>
+              <th>GitHub ID</th>
+              <th>个人ID</th>
+              <th>权限</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(u, i) in userRows" :key="i">
+              <td><n-input v-model:value="u.github" size="small" /></td>
+              <td><n-input v-model:value="u.name" size="small" /></td>
+              <td>
+                <n-select
+                  v-model:value="u.role"
+                  size="small"
+                  :options="roleOptions"
+                />
+              </td>
+              <td>
+                <n-button size="tiny" @click="userRows.splice(i, 1)"
+                  >删除</n-button
+                >
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="user-actions">
+        <n-button size="small" @click="addUser">新增用户</n-button>
+        <n-button
+          size="small"
+          type="primary"
+          :loading="savingUsers"
+          @click="saveUserRows"
+        >
+          保存用户
+        </n-button>
+      </div>
 
-      <h3>文件状态</h3>
-      <table v-if="docs.length" class="grid docs">
-        <thead>
-          <tr>
-            <th class="pick-col"></th>
-            <th>剧情</th>
-            <th>译者</th>
-            <th>翻译状态</th>
-            <th>校对者</th>
-            <th>校对状态</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="d in docs" :key="d.number">
-            <td>
-              <input
-                type="checkbox"
-                :checked="selected.has(d.number)"
-                :disabled="isArchived(d)"
-                @change="toggleSelected(d.number, $event)"
-              />
-            </td>
-            <td class="title">{{ d.title }}</td>
-            <td>
-              <n-select
-                v-model:value="d.tr.user"
-                size="small"
-                :options="userOptions"
-              />
-            </td>
-            <td>
-              <n-select
-                v-model:value="d.tr.state"
-                size="small"
-                :options="stateOptions"
-              />
-            </td>
-            <td>
-              <n-select
-                v-model:value="d.pr.user"
-                size="small"
-                :options="userOptions"
-              />
-            </td>
-            <td>
-              <n-select
-                v-model:value="d.pr.state"
-                size="small"
-                :options="stateOptions"
-              />
-            </td>
-            <td>
-              <div class="actions">
-                <n-button
-                  size="tiny"
-                  type="primary"
-                  :loading="busy === d.number"
-                  @click="saveDoc(d)"
-                >
-                  保存
-                </n-button>
-                <n-button
-                  v-if="isArchived(d)"
-                  size="tiny"
-                  type="success"
-                  :loading="busy === d.number"
-                  @click="restore(d)"
-                >
-                  恢复
-                </n-button>
-                <n-button
-                  v-else
-                  size="tiny"
-                  type="warning"
-                  :loading="busy === d.number"
-                  @click="archive(d)"
-                >
-                  过时存档
-                </n-button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="section-head">
+        <h3>文件状态</h3>
+        <div v-if="selectedCount" class="batch-actions">
+          <n-button
+            size="small"
+            type="primary"
+            :loading="batchSaving"
+            @click="batchSave"
+          >
+            批量保存({{ selectedCount }})
+          </n-button>
+          <n-button
+            size="small"
+            type="warning"
+            :loading="batching"
+            @click="batchArchive"
+          >
+            批量过时存档({{ selectedCount }})
+          </n-button>
+        </div>
+      </div>
+      <div v-if="docs.length" class="table-scroll">
+        <table class="grid docs">
+          <thead>
+            <tr>
+              <th class="pick-col">
+                <n-checkbox
+                  :checked="allSelectableSelected"
+                  @update:checked="toggleAll"
+                />
+              </th>
+              <th>剧情</th>
+              <th>译者</th>
+              <th>翻译状态</th>
+              <th>校对者</th>
+              <th>校对状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="d in docs" :key="d.number">
+              <td class="pick-col">
+                <n-checkbox
+                  :checked="selected.has(d.number)"
+                  :disabled="isArchived(d)"
+                  @update:checked="(v: boolean) => toggleSelected(d.number, v)"
+                />
+              </td>
+              <td class="title">{{ d.title }}</td>
+              <td>
+                <n-select
+                  v-model:value="d.tr.user"
+                  size="small"
+                  :options="userOptions"
+                />
+              </td>
+              <td>
+                <n-select
+                  v-model:value="d.tr.state"
+                  size="small"
+                  :options="stateOptions"
+                />
+              </td>
+              <td>
+                <n-select
+                  v-model:value="d.pr.user"
+                  size="small"
+                  :options="userOptions"
+                />
+              </td>
+              <td>
+                <n-select
+                  v-model:value="d.pr.state"
+                  size="small"
+                  :options="stateOptions"
+                />
+              </td>
+              <td>
+                <div class="actions">
+                  <n-button
+                    size="small"
+                    type="primary"
+                    :loading="busy === d.number"
+                    @click="saveDoc(d)"
+                  >
+                    保存
+                  </n-button>
+                  <n-button
+                    v-if="isArchived(d)"
+                    size="small"
+                    type="success"
+                    :loading="busy === d.number"
+                    @click="restore(d)"
+                  >
+                    恢复
+                  </n-button>
+                  <n-button
+                    v-else
+                    size="small"
+                    type="warning"
+                    :loading="busy === d.number"
+                    @click="archive(d)"
+                  >
+                    过时存档
+                  </n-button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <n-empty v-else-if="!loading" description="暂无文件" />
     </template>
   </div>
@@ -197,7 +218,7 @@
 
 <script setup lang="ts">
 import { computed, onActivated, onMounted, ref, watch } from 'vue'
-import { NAlert, NButton, NEmpty, NInput, NSelect } from 'naive-ui'
+import { NAlert, NButton, NCheckbox, NEmpty, NInput, NSelect } from 'naive-ui'
 import PushHeader from '../translate/push/PushHeader.vue'
 import { store } from '../../store'
 import {
@@ -234,6 +255,7 @@ const loading = ref(false)
 const savingUsers = ref(false)
 const savingMe = ref(false)
 const batching = ref(false)
+const batchSaving = ref(false)
 const uploading = ref(false)
 const busy = ref<number | null>(null)
 const error = ref('')
@@ -249,6 +271,12 @@ const uploadStage = ref<'ai' | 'translated' | 'proofread'>('ai')
 const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
 const canAdmin = computed(() => isAdmin(me.value))
 const selectedCount = computed(() => selected.value.size)
+const selectableDocs = computed(() => docs.value.filter((d) => !isArchived(d)))
+const allSelectableSelected = computed(
+  () =>
+    selectableDocs.value.length > 0 &&
+    selectableDocs.value.every((d) => selected.value.has(d.number))
+)
 const canUpload = computed(
   () => !!uploadFile.value && !!uploadTitle.value.trim()
 )
@@ -286,10 +314,15 @@ function isArchived(d: DocTask) {
   return archived.value.has(d.number)
 }
 
-function toggleSelected(n: number, e: Event) {
+function toggleSelected(n: number, v: boolean) {
   const next = new Set(selected.value)
-  ;(e.target as HTMLInputElement).checked ? next.add(n) : next.delete(n)
+  v ? next.add(n) : next.delete(n)
   selected.value = next
+}
+function toggleAll(v: boolean) {
+  selected.value = v
+    ? new Set(selectableDocs.value.map((d) => d.number))
+    : new Set()
 }
 
 async function refresh() {
@@ -381,6 +414,21 @@ async function batchArchive() {
     alert(`批量存档失败：${e?.message || e}`)
   }
   batching.value = false
+}
+
+async function batchSave() {
+  if (!store.octokitWrapper) return
+  const picked = docs.value.filter((d) => selected.value.has(d.number))
+  if (!picked.length) return
+  batchSaving.value = true
+  try {
+    for (const d of picked)
+      await updateTracks(store.octokitWrapper, d.number, d.tr, d.pr)
+    await refresh()
+  } catch (e: any) {
+    alert(`批量保存失败：${e?.message || e}`)
+  }
+  batchSaving.value = false
 }
 
 function onUploadFile(e: Event) {
@@ -476,15 +524,19 @@ export default {
   text-align: left;
 }
 .hint {
-  color: #888;
+  color: #64748b;
 }
 .toolbar,
 .profile,
 .upload,
+.user-actions,
+.section-head,
+.batch-actions,
 .actions {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 .toolbar {
   margin: 10px 0;
@@ -493,22 +545,46 @@ h3 {
   margin: 18px 0 8px;
   font-size: 16px;
 }
+.user-actions {
+  margin-bottom: 10px;
+}
+.section-head {
+  justify-content: space-between;
+  margin-top: 18px;
+  gap: 12px;
+}
+.section-head h3 {
+  margin: 0 0 8px;
+}
+.batch-actions {
+  margin-bottom: 8px;
+}
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  margin-bottom: 8px;
+}
 .grid {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  margin-bottom: 8px;
 }
 .grid th,
 .grid td {
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #e2e8f0;
   padding: 7px 6px;
   text-align: left;
 }
+.grid tbody tr:last-child td {
+  border-bottom: 0;
+}
 .grid th {
-  color: #888;
+  color: #64748b;
   font-weight: 500;
   font-size: 13px;
+  background: #f8fafc;
 }
 .profile .n-input {
   max-width: 220px;
@@ -523,11 +599,18 @@ h3 {
   width: 130px;
 }
 .pick-col {
-  width: 28px;
+  width: 34px;
+  text-align: center;
 }
 .users th:nth-child(1),
 .users th:nth-child(2) {
   width: 34%;
+}
+.users {
+  min-width: 560px;
+}
+.docs {
+  min-width: 980px;
 }
 .users th:nth-child(3) {
   width: 120px;
@@ -547,7 +630,23 @@ h3 {
   width: 110px;
 }
 .docs th:nth-child(7) {
-  width: 170px;
+  width: 190px;
+}
+.docs th:nth-child(7),
+.docs td:nth-child(7) {
+  text-align: center;
+}
+.docs .actions {
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+.docs .actions :deep(.n-button) {
+  min-width: 70px;
+  height: 30px;
+  padding: 0 10px;
+}
+.docs .actions :deep(.n-button__content) {
+  white-space: nowrap;
 }
 .title {
   word-break: break-all;
