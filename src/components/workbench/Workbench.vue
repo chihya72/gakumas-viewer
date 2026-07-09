@@ -48,6 +48,7 @@
         <table class="grid">
           <colgroup>
             <col class="sel-col" />
+            <col class="source-col" />
             <col />
             <col class="track-col" />
             <col class="track-col" />
@@ -60,6 +61,7 @@
                   @update:checked="toggleAll"
                 />
               </th>
+              <th>入库</th>
               <th>剧情</th>
               <th>翻译</th>
               <th>校对</th>
@@ -72,6 +74,9 @@
                   :checked="selected.has(d.number)"
                   @update:checked="(v: boolean) => toggleSel(d.number, v)"
                 />
+              </td>
+              <td class="source-time">
+                {{ formatGmt8(d.sourceCommitTime || '') }}
               </td>
               <td class="doc">
                 <a href="javascript:;" @click="open(d)">{{ d.title }}</a>
@@ -242,8 +247,10 @@ import {
   docFromIssue,
   formatGmt8,
   fileCommitTime,
+  fillDocSourceCommitTimes,
   aiCompleteTranslation,
   isArchivedIssue,
+  sortBySourceCommitTime,
   applyTrack,
   editorUrlForPath,
   pushContentToWorkPath,
@@ -388,9 +395,14 @@ async function refresh(includeTimes = true) {
       .map(docFromIssue)
       .map((d) => {
         const old = oldTimes.get(d.number)
-        return { ...d, trCsvTime: old?.trCsvTime, prCsvTime: old?.prCsvTime }
+        return {
+          ...d,
+          sourceCommitTime: old?.sourceCommitTime,
+          trCsvTime: old?.trCsvTime,
+          prCsvTime: old?.prCsvTime,
+        }
       })
-      .sort((a, b) => a.title.localeCompare(b.title))
+      .sort(sortBySourceCommitTime)
     if (includeTimes) fillCommitTimes(seq)
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}（确认工作仓库存在且有权限）`
@@ -401,8 +413,9 @@ async function refresh(includeTimes = true) {
 async function fillCommitTimes(seq: number) {
   const w = store.octokitWrapper
   if (!w) return
+  const docsWithSourceTime = await fillDocSourceCommitTimes(w, docs.value)
   const times = await Promise.all(
-    docs.value.map(async (d) => ({
+    docsWithSourceTime.map(async (d) => ({
       number: d.number,
       trCsvTime:
         d.tr.state === '完成' ? await fileCommitTime(w, d.translatedPath) : '',
@@ -412,7 +425,10 @@ async function fillCommitTimes(seq: number) {
   )
   if (seq !== refreshSeq) return
   const byNumber = new Map(times.map((t) => [t.number, t]))
-  docs.value = docs.value.map((d) => ({ ...d, ...byNumber.get(d.number) }))
+  docs.value = docsWithSourceTime.map((d) => ({
+    ...d,
+    ...byNumber.get(d.number),
+  }))
 }
 
 async function downloadCsvPath(path: string, title: string, label: string) {
@@ -623,7 +639,7 @@ export default {
   border-collapse: collapse;
   table-layout: fixed;
   min-width: 0;
-  font-size: 16px;
+  font-size: 14px;
 }
 .grid th,
 .grid td {
@@ -644,20 +660,23 @@ export default {
 .sel-col {
   width: 34px;
 }
+.source-col {
+  width: 112px;
+}
 .track-col {
   width: 360px;
 }
-.grid th:nth-child(2),
-.grid td:nth-child(2) {
-  padding-right: 20px;
-}
 .grid th:nth-child(3),
 .grid td:nth-child(3) {
-  padding-left: 16px;
-  padding-right: 16px;
+  padding-right: 20px;
 }
 .grid th:nth-child(4),
 .grid td:nth-child(4) {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.grid th:nth-child(5),
+.grid td:nth-child(5) {
   padding-left: 16px;
   padding-right: 16px;
 }
@@ -665,10 +684,17 @@ export default {
   background: #eff6ff;
 }
 .doc {
-  word-break: break-all;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .doc a {
-  font-size: 17px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
   line-height: 30px;
 }
 .doc .parts {
@@ -732,5 +758,10 @@ export default {
   font-size: 13px;
   white-space: nowrap;
   line-height: 32px;
+}
+.source-time {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
 }
 </style>

@@ -12,7 +12,9 @@
       </div>
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
       <div v-for="d in rows" :key="d.number" class="row">
-        <n-tag size="small" type="success" :bordered="false">完成</n-tag>
+        <span class="source-time">{{
+          formatGmt8(d.sourceCommitTime || '')
+        }}</span>
         <span class="title">{{ d.title }}</span>
         <span class="user"
           >翻译：{{ displayUser(d.tr.user)
@@ -43,7 +45,7 @@
 <script setup lang="ts">
 import { ref, onActivated, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NTag, NEmpty, NAlert } from 'naive-ui'
+import { NButton, NEmpty, NAlert } from 'naive-ui'
 import FileSaver from 'file-saver'
 import PushHeader from '../translate/push/PushHeader.vue'
 import { store } from '../../store'
@@ -58,6 +60,7 @@ import {
   fetchNameDict,
   fetchRawTxt,
   fileCommitTime,
+  fillDocSourceCommitTimes,
   formatGmt8,
   isArchivedIssue,
   workRawUrl,
@@ -97,7 +100,10 @@ async function refresh() {
     rows.value = (issues as any[])
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
-      .sort((a, b) => b.number - a.number)
+    rows.value = await fillDocSourceCommitTimes(
+      store.octokitWrapper,
+      rows.value
+    )
     // 补 翻译/校对 CSV 各自的最后 commit 时间
     const w = store.octokitWrapper
     await Promise.all(
@@ -179,7 +185,7 @@ export default {
 }
 .row {
   display: grid;
-  grid-template-columns: auto minmax(220px, 1fr) 190px 190px repeat(4, 82px);
+  grid-template-columns: 112px minmax(196px, 1fr) 190px 190px repeat(4, 82px);
   gap: 10px;
   align-items: center;
   padding: 10px 0;
@@ -198,6 +204,11 @@ export default {
 }
 .row :deep(.n-button) {
   width: 82px;
+  white-space: nowrap;
+}
+.source-time {
+  color: #64748b;
+  font-size: 12px;
   white-space: nowrap;
 }
 </style>

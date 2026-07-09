@@ -12,6 +12,9 @@
       </div>
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
       <div v-for="d in rows" :key="d.number" class="row">
+        <span class="source-time">{{
+          formatGmt8(d.sourceCommitTime || '')
+        }}</span>
         <n-tag size="small" type="warning" :bordered="false">已存档</n-tag>
         <span class="title">{{ d.title }}</span>
         <span class="user">翻译：{{ trackText(d.tr) }}</span>
@@ -40,6 +43,8 @@ import {
   WORK_OWNER,
   WORK_REPO,
   docFromIssue,
+  fillDocSourceCommitTimes,
+  formatGmt8,
   isArchivedIssue,
   restoreIssue,
   type DocTask,
@@ -72,7 +77,10 @@ async function refresh() {
     rows.value = (issues as any[])
       .filter((i) => !i.pull_request && isArchivedIssue(i))
       .map(docFromIssue)
-      .sort((a, b) => b.number - a.number)
+    rows.value = await fillDocSourceCommitTimes(
+      store.octokitWrapper,
+      rows.value
+    )
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}`
   }
@@ -113,7 +121,8 @@ export default {
 
 <style scoped>
 .workbench {
-  max-width: 1120px;
+  width: min(1170px, calc(100vw - 48px));
+  max-width: 1170px;
   margin: 0 auto;
   text-align: left;
 }
@@ -125,19 +134,31 @@ export default {
   margin: 10px 0;
 }
 .row {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 112px auto minmax(196px, 1fr) 170px 170px 82px;
+  gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
   padding: 10px 0;
   border-bottom: 1px solid #e2e8f0;
 }
 .title {
-  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
-  word-break: break-all;
 }
 .user {
   font-size: 12px;
+  white-space: nowrap;
+}
+.row :deep(.n-button) {
+  width: 82px;
+  white-space: nowrap;
+}
+.source-time {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
 }
 </style>

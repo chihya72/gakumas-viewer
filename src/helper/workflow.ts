@@ -36,6 +36,7 @@ export interface DocTask {
   tr: Track
   pr: Track
   updatedAt: string // issue 最后更新时间(ISO)
+  sourceCommitTime?: string // 原始文本首次进入源仓库的 commit 时间
   trCsvTime?: string // translated_csv 最后 commit 时间（页面异步填充）
   prCsvTime?: string // proofread_csv 最后 commit 时间（页面异步填充）
 }
@@ -60,6 +61,93 @@ export async function fileCommitTime(
   } catch {
     return ''
   }
+}
+
+async function firstFileCommitTimeInRepo(
+  wrapper: any,
+  owner: string,
+  repo: string,
+  path: string,
+  branch = 'main'
+): Promise<string> {
+  try {
+    for (let page = 1; ; page++) {
+      const { data } = await wrapper.request(
+        'GET /repos/{owner}/{repo}/commits',
+        {
+          owner,
+          repo,
+          sha: branch,
+          path,
+          per_page: 100,
+          page,
+          headers: { 'X-GitHub-Api-Version': '2022-11-28' },
+        }
+      )
+      if (!data?.length) return ''
+      if (data.length < 100)
+        return data[data.length - 1]?.commit?.committer?.date || ''
+    }
+  } catch {
+    return ''
+  }
+}
+
+export async function docSourceCommitTime(
+  wrapper: any,
+  d: Pick<DocTask, 'title' | 'rawPath' | 'aiPath'>
+): Promise<string> {
+  const [owner, repo] = CAMPUS_REPO.split('/')
+  const campus = owner && repo
+    ? await firstFileCommitTimeInRepo(
+        wrapper,
+        owner,
+        repo,
+        `Resource/${d.title}.txt`
+      )
+    : ''
+  return (
+    campus ||
+    (await firstFileCommitTimeInRepo(
+      wrapper,
+      WORK_OWNER,
+      WORK_REPO,
+      d.rawPath,
+      WORK_BRANCH
+    )) ||
+    (await firstFileCommitTimeInRepo(
+      wrapper,
+      WORK_OWNER,
+      WORK_REPO,
+      d.aiPath,
+      WORK_BRANCH
+    ))
+  )
+}
+
+export function sortBySourceCommitTime(a: DocTask, b: DocTask) {
+  return (
+    (b.sourceCommitTime || b.updatedAt || '').localeCompare(
+      a.sourceCommitTime || a.updatedAt || ''
+    ) || a.title.localeCompare(b.title)
+  )
+}
+
+export async function fillDocSourceCommitTimes(
+  wrapper: any,
+  docs: DocTask[]
+): Promise<DocTask[]> {
+  const times = await Promise.all(
+    docs.map(async (d) => ({
+      number: d.number,
+      sourceCommitTime:
+        d.sourceCommitTime || (await docSourceCommitTime(wrapper, d)),
+    }))
+  )
+  const byNumber = new Map(times.map((t) => [t.number, t.sourceCommitTime]))
+  return docs
+    .map((d) => ({ ...d, sourceCommitTime: byNumber.get(d.number) || '' }))
+    .sort(sortBySourceCommitTime)
 }
 
 // 一键完成翻译（无人接翻译、直接采用 AI 机翻稿）：
