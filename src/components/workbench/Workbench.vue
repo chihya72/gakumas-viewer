@@ -46,6 +46,12 @@
 
       <div v-if="rows.length" class="table-scroll">
         <table class="grid">
+          <colgroup>
+            <col class="sel-col" />
+            <col />
+            <col class="track-col" />
+            <col class="track-col" />
+          </colgroup>
           <thead>
             <tr>
               <th class="sel-col">
@@ -156,7 +162,7 @@
                     {{ formatGmt8(d.prCsvTime) }}
                   </span>
                   <n-button
-                    v-if="showPrDownload(d)"
+                    v-if="d.pr.user === me && d.tr.state === '完成'"
                     class="neutral-action"
                     size="tiny"
                     @click="downloadCsvPath(d.translatedPath, d.title, '翻译')"
@@ -365,10 +371,6 @@ function prCellLabel(d: DocTask) {
 
 function showPrStatus(d: DocTask) {
   return !isMine(d) || d.pr.state === '待认领' || d.tr.state !== '完成'
-}
-
-function showPrDownload(d: DocTask) {
-  return d.pr.user === me.value && d.tr.state === '完成'
 }
 
 async function refresh(includeTimes = true) {
@@ -642,27 +644,22 @@ export default {
 .sel-col {
   width: 34px;
 }
-.grid th:nth-child(2) {
-  width: 36%;
-}
-.grid th:nth-child(3) {
-  width: 34%;
-}
-.grid th:nth-child(4) {
-  width: 26%;
+.track-col {
+  width: 360px;
 }
 .grid th:nth-child(2),
 .grid td:nth-child(2) {
-  padding-right: 28px;
+  padding-right: 20px;
 }
 .grid th:nth-child(3),
 .grid td:nth-child(3) {
-  padding-left: 24px;
-  padding-right: 34px;
+  padding-left: 16px;
+  padding-right: 16px;
 }
 .grid th:nth-child(4),
 .grid td:nth-child(4) {
-  padding-left: 24px;
+  padding-left: 16px;
+  padding-right: 16px;
 }
 .grid tr.mine {
   background: #eff6ff;
@@ -686,6 +683,8 @@ export default {
   align-items: center;
   min-height: 32px;
   justify-content: start;
+  width: max-content;
+  white-space: nowrap;
 }
 .status-tag {
   --n-height: 32px !important;

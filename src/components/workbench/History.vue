@@ -26,18 +26,13 @@
             · {{ formatGmt8(d.prCsvTime) }}</template
           ></span
         >
-        <n-button size="tiny" @click="downloadCsv(d)">校对CSV</n-button>
+        <n-button size="tiny" @click="downloadCsv(d)">下载CSV</n-button>
         <n-button size="tiny" @click="downloadChineseTxt(d)"
-          >纯中文TXT</n-button
+          >下载TXT</n-button
         >
-        <!-- 重新翻译对所有登录用户常开（再次完成覆盖阶段目录、译者更新为重做者）；校对仍限本人 -->
         <n-button size="tiny" @click="openEditor(d, 'tr')">重新翻译</n-button>
-        <n-button
-          v-if="me && d.pr.user === me"
-          size="tiny"
-          @click="openEditor(d, 'pr')"
-        >
-          重新修改校对
+        <n-button size="tiny" @click="openEditor(d, 'pr')">
+          重新校对
         </n-button>
       </div>
       <n-empty v-if="!loading && !rows.length" description="暂无已完成文件" />
@@ -46,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onActivated, onMounted, watch } from 'vue'
+import { ref, onActivated, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NTag, NEmpty, NAlert } from 'naive-ui'
 import FileSaver from 'file-saver'
@@ -74,15 +69,15 @@ const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 const rows = ref<DocTask[]>([])
-const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
 
-// 重新修改：打开工作文件编辑器（再次完成会覆盖对应阶段目录快照）
+// 重新修改：打开已完成阶段文件；再次完成会把对应作者更新为当前用户。
 function openEditor(d: DocTask, role: TrackKey) {
-  if (!d.paths.length) {
+  const path = role === 'tr' ? d.translatedPath : d.proofreadPath
+  if (!path) {
     alert('该文件缺少路径标记')
     return
   }
-  router.push(editorUrlForPath(d.paths[0], d.number, role))
+  router.push(editorUrlForPath(path, d.number, role))
 }
 
 async function refresh() {
@@ -170,7 +165,8 @@ export default {
 
 <style scoped>
 .workbench {
-  max-width: 1120px;
+  width: min(1170px, calc(100vw - 48px));
+  max-width: 1170px;
   margin: 0 auto;
   text-align: left;
 }
@@ -182,19 +178,26 @@ export default {
   margin: 10px 0;
 }
 .row {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr) 190px 190px repeat(4, 82px);
+  gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
   padding: 10px 0;
   border-bottom: 1px solid #e2e8f0;
 }
 .title {
-  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
-  word-break: break-all;
 }
 .user {
   font-size: 12px;
+  white-space: nowrap;
+}
+.row :deep(.n-button) {
+  width: 82px;
+  white-space: nowrap;
 }
 </style>

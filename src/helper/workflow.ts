@@ -425,6 +425,10 @@ export function myStatusOf(
     return { activeRole: 'tr', blocked: false, blockMsg: '' }
   }
   const asPr = (): MyStatus => {
+    // 重新校对常开：校对轨已完成时，任何登录用户显式带 role=pr 进来都可重做。
+    // （再次完成会覆盖 proofread_csv，校对者更新为重做者）
+    if (pr.state === '完成' && role === 'pr' && tr.state === '完成')
+      return { activeRole: 'pr', blocked: false, blockMsg: '' }
     if (pr.user !== me) return none
     if (pr.state === '完成' && role !== 'pr') return done
     if (tr.state === '完成')
