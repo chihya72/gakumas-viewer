@@ -4,8 +4,15 @@ import {
   extractInfoFromUrl,
   metaInfoFromGithubCsvUrl,
   metaInfoFromJsonPathUrl,
+  parseGithubBlobUrl,
 } from './path'
 import { store } from '../store'
+
+function base64ToUtf8(b64: string): string {
+  const bin = atob(b64.replace(/\n/g, ''))
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
+}
 
 async function preprocessRemoteSourceInput(sourceInput: string): Promise<{
   csvText: string // csv text
@@ -16,8 +23,25 @@ async function preprocessRemoteSourceInput(sourceInput: string): Promise<{
   if (sourceInput.endsWith('.csv')) {
     // a url ends with .csv is expected to be a github url
     const mode = DataMode.Server
-    const { name, text } = await metaInfoFromGithubCsvUrl(sourceInput)
     const { path } = extractInfoFromUrl(sourceInput)
+    let name = ''
+    let text = ''
+    if (store.octokitWrapper && sourceInput.startsWith('https://github.com')) {
+      const meta = parseGithubBlobUrl(sourceInput)
+      const file: any = await store.octokitWrapper.getContent(
+        meta.owner,
+        meta.repo,
+        meta.branch,
+        meta.path,
+        true
+      )
+      name = decodeURI(meta.path.split('/').reverse()[0])
+      text = base64ToUtf8(file.content)
+    } else {
+      const meta = await metaInfoFromGithubCsvUrl(sourceInput)
+      name = meta.name
+      text = meta.text
+    }
     return {
       name,
       path: decodeURIComponent(path),

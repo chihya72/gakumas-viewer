@@ -4,7 +4,7 @@
     <img
       :src="avatarUrl"
       :alt="name"
-      onerror="this.onerror=null;this.src='/icon/dummy.webp'"
+      @error="onAvatarError"
     />
   </div>
 </template>
@@ -27,6 +27,13 @@ export default defineComponent({
     avatarUrl() {
       return getAvatarPath(this.name)
       // return `/icon/${this.name}.webp`;
+    },
+  },
+  methods: {
+    onAvatarError(e: Event) {
+      const img = e.target as HTMLImageElement
+      img.onerror = null
+      img.src = getAvatarPath('')
     },
   },
 })

@@ -38,10 +38,11 @@ for (const unit of Object.keys(units)) {
 }
 
 function getAvatarPath(name: string) {
+  const base = import.meta.env.BASE_URL
   if (characters.some((character) => character.firstName === name)) {
-    return `/icon/${name}.webp`
+    return `${base}icon/${name}.webp`
   }
-  return '/icon/dummy.webp'
+  return `${base}icon/dummy.webp`
 }
 
 function getAudioPath(id: string, base: string) {

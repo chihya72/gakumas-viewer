@@ -15,6 +15,13 @@
         >
         <span class="me">我：{{ displayUser(me) }}</span>
         <n-checkbox v-model:checked="onlyMine">只看我的</n-checkbox>
+        <input
+          ref="csvUploadInput"
+          class="csv-upload-input"
+          type="file"
+          accept=".csv,text/csv"
+          @change="onCsvUploadPicked"
+        />
         <template v-if="selected.size">
           <n-button
             size="small"
@@ -90,19 +97,19 @@
                     v-if="d.tr.state === '待认领'"
                     size="tiny"
                     type="info"
-                    :loading="busy === d.number"
+                    :disabled="busy === d.number"
                     @click="claim(d, 'tr')"
                   >
-                    认领
+                    {{ busy === d.number ? busyText : '认领' }}
                   </n-button>
                   <n-button
                     v-if="canAiComplete(d)"
                     size="tiny"
                     type="warning"
-                    :loading="busy === d.number"
+                    :disabled="busy === d.number"
                     @click="aiComplete(d)"
                   >
-                    采用AI稿
+                    {{ busy === d.number ? busyText : '采用AI稿' }}
                   </n-button>
                   <n-button
                     v-if="d.tr.user === me && d.tr.state === '进行中'"
@@ -111,6 +118,15 @@
                     @click="open(d, 'tr')"
                   >
                     开始翻译
+                  </n-button>
+                  <n-button
+                    v-if="d.tr.user === me && d.tr.state === '进行中'"
+                    size="tiny"
+                    type="primary"
+                    :disabled="busy === d.number"
+                    @click="pickCsvUpload(d, 'tr')"
+                  >
+                    {{ busy === d.number ? busyText : '上传翻译CSV' }}
                   </n-button>
                   <n-button
                     v-if="showTrDownload(d) && d.tr.state === '完成'"
@@ -148,13 +164,25 @@
                     下载翻译CSV
                   </n-button>
                   <n-button
+                    v-if="
+                      d.pr.user === me &&
+                      d.tr.state === '完成' &&
+                      d.pr.state === '完成'
+                    "
+                    class="neutral-action"
+                    size="tiny"
+                    @click="open(d, 'pr')"
+                  >
+                    重新校对
+                  </n-button>
+                  <n-button
                     v-if="d.pr.state === '待认领'"
                     size="tiny"
                     type="info"
-                    :loading="busy === d.number"
+                    :disabled="busy === d.number"
                     @click="claim(d, 'pr')"
                   >
-                    认领
+                    {{ busy === d.number ? busyText : '认领' }}
                   </n-button>
                   <n-button
                     v-if="
@@ -167,6 +195,19 @@
                     @click="open(d, 'pr')"
                   >
                     开始校对
+                  </n-button>
+                  <n-button
+                    v-if="
+                      d.pr.user === me &&
+                      d.tr.state === '完成' &&
+                      d.pr.state !== '完成'
+                    "
+                    size="tiny"
+                    type="primary"
+                    :disabled="busy === d.number"
+                    @click="pickCsvUpload(d, 'pr')"
+                  >
+                    {{ busy === d.number ? busyText : '上传校对CSV' }}
                   </n-button>
                 </div>
               </td>
@@ -187,9 +228,11 @@ import { store } from '../../store'
 import PushHeader from '../translate/push/PushHeader.vue'
 import FileSaver from 'file-saver'
 import { displayUser, loadUsers } from '../../helper/users'
+import { extractInfoFromCsvText, type CsvDataLine } from '../../helper/csv'
 import {
   WORK_OWNER,
   WORK_REPO,
+  WORK_BRANCH,
   docFromIssue,
   formatGmt8,
   fileCommitTime,
@@ -197,6 +240,8 @@ import {
   isArchivedIssue,
   applyTrack,
   editorUrlForPath,
+  pushContentToWorkPath,
+  validateRowsHtmlTags,
   workRawUrl,
   type DocTask,
   type TrackKey,
@@ -210,6 +255,9 @@ const batchBusy = ref(false)
 const error = ref('')
 const onlyMine = ref(false)
 const docs = ref<DocTask[]>([])
+const csvUploadInput = ref<HTMLInputElement | null>(null)
+const pendingUpload = ref<{ d: DocTask; role: TrackKey } | null>(null)
+const busyText = ref('')
 let refreshSeq = 0
 const activatedRefresh = () => {
   if (!busy.value && !batchBusy.value) refresh(docs.value.length === 0)
@@ -262,6 +310,7 @@ async function aiComplete(d: DocTask) {
   if (!store.octokitWrapper) return
   if (!confirm(`直接采用 AI 机翻稿作为 ${d.title} 的翻译成稿？`)) return
   busy.value = d.number
+  busyText.value = '处理中'
   try {
     await aiCompleteTranslation(store.octokitWrapper, d, me.value)
     await refresh()
@@ -269,6 +318,7 @@ async function aiComplete(d: DocTask) {
     alert(`一键完成失败：${e?.message || e}`)
   }
   busy.value = null
+  busyText.value = ''
 }
 
 const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
@@ -318,7 +368,7 @@ function showPrStatus(d: DocTask) {
 }
 
 function showPrDownload(d: DocTask) {
-  return isMine(d) && d.tr.state === '完成'
+  return d.pr.user === me.value && d.tr.state === '完成'
 }
 
 async function refresh(includeTimes = true) {
@@ -364,20 +414,127 @@ async function fillCommitTimes(seq: number) {
 }
 
 async function downloadCsvPath(path: string, title: string, label: string) {
-  const r = await fetch(workRawUrl(path))
-  if (!r.ok) {
-    alert(`${label}CSV下载失败: ${r.status}`)
-    return
+  if (!store.octokitWrapper) return
+  try {
+    const file: any = await store.octokitWrapper.getContent(
+      WORK_OWNER,
+      WORK_REPO,
+      WORK_BRANCH,
+      path,
+      true
+    )
+    FileSaver.saveAs(
+      new Blob([base64ToUtf8(file.content)], { type: 'text/csv;charset=utf-8' }),
+      `${title}_${label}.csv`
+    )
+  } catch (e: any) {
+    alert(`${label}CSV下载失败：${e?.message || e}`)
   }
-  FileSaver.saveAs(await r.blob(), `${title}_${label}.csv`)
+}
+
+function validateSourceText(base: CsvDataLine[], uploaded: CsvDataLine[]) {
+  if (base.length !== uploaded.length)
+    return [`行数不一致：仓库 ${base.length} 行，本地 ${uploaded.length} 行`]
+  const errors: string[] = []
+  base.forEach((row, i) => {
+    const next = uploaded[i]
+    if (row.id !== next.id) {
+      errors.push(`第 ${i + 2} 行ID不一致：${row.id} / ${next.id}`)
+      return
+    }
+    if (row.text !== next.text) errors.push(`第 ${i + 2} 行日语原文被修改`)
+  })
+  return errors
+}
+
+function utf8ToBase64(text: string) {
+  const bytes = new TextEncoder().encode(text)
+  let bin = ''
+  bytes.forEach((b) => (bin += String.fromCharCode(b)))
+  return btoa(bin)
+}
+
+function base64ToUtf8(b64: string) {
+  const bin = atob(b64.replace(/\n/g, ''))
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
+}
+
+function pickCsvUpload(d: DocTask, role: TrackKey) {
+  pendingUpload.value = { d, role }
+  if (!csvUploadInput.value) return
+  csvUploadInput.value.value = ''
+  csvUploadInput.value.click()
+}
+
+async function onCsvUploadPicked(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0] || null
+  const job = pendingUpload.value
+  if (!file || !job || !store.octokitWrapper) return
+  pendingUpload.value = null
+  await uploadCsv(job.d, job.role, file)
+}
+
+async function uploadCsv(d: DocTask, role: TrackKey, file: File) {
+  if (!store.octokitWrapper) return
+  const label = role === 'tr' ? '翻译' : '校对'
+  const sourcePath = role === 'tr' ? d.aiPath : d.translatedPath
+  const targetPath = role === 'tr' ? d.translatedPath : d.proofreadPath
+  busy.value = d.number
+  busyText.value = role === 'tr' ? '翻译上传中' : '校对上传中'
+  try {
+    const [baseFile, text] = await Promise.all([
+      store.octokitWrapper.getContent(
+        WORK_OWNER,
+        WORK_REPO,
+        WORK_BRANCH,
+        sourcePath,
+        true
+      ),
+      file.text(),
+    ])
+    const base = extractInfoFromCsvText(base64ToUtf8((baseFile as any).content))
+    const uploaded = extractInfoFromCsvText(text)
+    const textErrors = validateSourceText(base.data, uploaded.data)
+    if (textErrors.length)
+      throw new Error(
+        `日语原文不一致，禁止上传：\n${textErrors.slice(0, 5).join('\n')}`
+      )
+    const tagErrors = validateRowsHtmlTags(uploaded.data)
+    if (tagErrors.length)
+      throw new Error(
+        `HTML标签不一致，禁止上传：\n${tagErrors.slice(0, 5).join('\n')}`
+      )
+    await pushContentToWorkPath(
+      store.octokitWrapper,
+      targetPath,
+      utf8ToBase64(text),
+      `${label}上传完成 ${d.title}`
+    )
+    await applyTrack(store.octokitWrapper, d.number, role, {
+      user: me.value,
+      state: '完成',
+    })
+    await refresh()
+    alert(`${label}CSV上传完成`)
+  } catch (e: any) {
+    const msg = e?.message || e
+    alert(String(msg).includes('禁止上传') ? msg : `${label}CSV上传失败：${msg}`)
+  }
+  busy.value = null
+  busyText.value = ''
 }
 
 function open(d: DocTask, role?: TrackKey) {
   const path =
     role === 'tr'
-      ? d.aiPath
+      ? d.tr.state === '完成'
+        ? d.translatedPath
+        : d.aiPath
       : role === 'pr'
-      ? d.translatedPath
+      ? d.pr.state === '完成'
+        ? d.proofreadPath
+        : d.translatedPath
       : d.tr.state === '完成'
       ? d.translatedPath
       : d.aiPath
@@ -392,6 +549,7 @@ function open(d: DocTask, role?: TrackKey) {
 async function claim(d: DocTask, k: TrackKey) {
   if (!store.octokitWrapper) return
   busy.value = d.number
+  busyText.value = '认领中'
   try {
     await applyTrack(store.octokitWrapper, d.number, k, {
       user: me.value,
@@ -402,6 +560,7 @@ async function claim(d: DocTask, k: TrackKey) {
     alert(`认领失败：${e?.message || e}`)
   }
   busy.value = null
+  busyText.value = ''
 }
 
 watch(
@@ -424,7 +583,8 @@ export default {
 
 <style scoped>
 .workbench {
-  max-width: 1120px;
+  width: min(1400px, calc(100vw - 48px));
+  max-width: 1170px;
   margin: 0 auto;
   text-align: left;
 }
@@ -439,12 +599,19 @@ export default {
   flex-wrap: wrap;
   margin: 10px 0;
 }
+.csv-upload-input {
+  display: none;
+}
 .me {
   color: #64748b;
-  font-size: 12px;
+  font-size: 11px;
+}
+.workbench :deep(.n-button),
+.workbench :deep(.n-checkbox) {
+  font-size: 14px;
 }
 .table-scroll {
-  overflow-x: auto;
+  overflow-x: hidden;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
@@ -453,8 +620,8 @@ export default {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  min-width: 860px;
-  font-size: 17px;
+  min-width: 0;
+  font-size: 16px;
 }
 .grid th,
 .grid td {
@@ -469,7 +636,7 @@ export default {
 .grid th {
   color: #64748b;
   font-weight: 500;
-  font-size: 13px;
+  font-size: 12px;
   background: #f8fafc;
 }
 .sel-col {
@@ -504,17 +671,17 @@ export default {
   word-break: break-all;
 }
 .doc a {
-  font-size: 18px;
+  font-size: 17px;
   line-height: 30px;
 }
 .doc .parts {
   color: #aaa;
-  font-size: 13px;
+  font-size: 12px;
   margin-left: 6px;
 }
 .track-line {
   display: grid;
-  grid-template-columns: 112px 112px;
+  grid-template-columns: repeat(3, 104px);
   column-gap: 8px;
   align-items: center;
   min-height: 32px;
@@ -526,7 +693,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 112px;
+  width: 104px;
   height: 32px;
   min-width: 0;
   box-sizing: border-box;
@@ -538,16 +705,17 @@ export default {
   justify-content: center;
   width: 100%;
   height: 32px;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 32px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .track-line :deep(.n-button) {
-  width: 112px;
+  width: 104px;
   height: 32px;
-  font-size: 15px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 .neutral-action {
   --n-color: #f3f3f5 !important;
@@ -562,7 +730,7 @@ export default {
 }
 .time {
   color: #999;
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
   line-height: 32px;
 }
