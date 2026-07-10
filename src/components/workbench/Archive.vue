@@ -11,24 +11,29 @@
         >
       </div>
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
-      <div v-for="d in rows" :key="d.number" class="row">
-        <span class="source-time">{{
-          formatGmt8(d.sourceCommitTime || '')
-        }}</span>
-        <n-tag size="small" type="warning" :bordered="false">已存档</n-tag>
-        <span class="title">{{ d.title }}</span>
-        <span class="user">翻译：{{ trackText(d.tr) }}</span>
-        <span class="user">校对：{{ trackText(d.pr) }}</span>
-        <n-button
-          size="tiny"
-          type="success"
-          :loading="busy === d.number"
-          @click="restore(d)"
-        >
-          恢复
-        </n-button>
-      </div>
-      <n-empty v-if="!loading && !rows.length" description="暂无存档文件" />
+      <doc-filters v-slot="{ rows: filteredRows }" :docs="rows" all-archived>
+        <div v-for="d in filteredRows" :key="d.number" class="row">
+          <span class="source-time">{{
+            formatGmt8(d.sourceCommitTime || '')
+          }}</span>
+          <n-tag size="small" type="warning" :bordered="false">已存档</n-tag>
+          <span class="title">{{ d.title }}</span>
+          <span class="user">翻译：{{ trackText(d.tr) }}</span>
+          <span class="user">校对：{{ trackText(d.pr) }}</span>
+          <n-button
+            size="tiny"
+            type="success"
+            :loading="busy === d.number"
+            @click="restore(d)"
+          >
+            恢复
+          </n-button>
+        </div>
+        <n-empty
+          v-if="!loading && !filteredRows.length"
+          :description="rows.length ? '没有符合筛选条件的文件' : '暂无存档文件'"
+        />
+      </doc-filters>
     </template>
   </div>
 </template>
@@ -37,6 +42,7 @@
 import { ref, onActivated, onMounted, watch } from 'vue'
 import { NButton, NTag, NEmpty, NAlert } from 'naive-ui'
 import PushHeader from '../translate/push/PushHeader.vue'
+import DocFilters from './DocFilters.vue'
 import { store } from '../../store'
 import { displayUser, loadUsers } from '../../helper/users'
 import {

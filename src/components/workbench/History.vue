@@ -11,29 +11,40 @@
         >
       </div>
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
-      <div v-for="d in rows" :key="d.number" class="row">
-        <span class="source-time">{{
-          formatGmt8(d.sourceCommitTime || '')
-        }}</span>
-        <span class="title">{{ d.title }}</span>
-        <span class="user"
-          >翻译：{{ displayUser(d.tr.user)
-          }}<template v-if="d.trCsvTime">
-            · {{ formatGmt8(d.trCsvTime) }}</template
-          ></span
-        >
-        <span class="user"
-          >校对：{{ displayUser(d.pr.user)
-          }}<template v-if="d.prCsvTime">
-            · {{ formatGmt8(d.prCsvTime) }}</template
-          ></span
-        >
-        <n-button size="tiny" @click="downloadCsv(d)">下载CSV</n-button>
-        <n-button size="tiny" @click="downloadChineseTxt(d)">下载TXT</n-button>
-        <n-button size="tiny" @click="openEditor(d, 'tr')">重新翻译</n-button>
-        <n-button size="tiny" @click="openEditor(d, 'pr')"> 重新校对 </n-button>
-      </div>
-      <n-empty v-if="!loading && !rows.length" description="暂无已完成文件" />
+      <doc-filters v-slot="{ rows: filteredRows }" :docs="rows">
+        <div v-for="d in filteredRows" :key="d.number" class="row">
+          <span class="source-time">{{
+            formatGmt8(d.sourceCommitTime || '')
+          }}</span>
+          <span class="title">{{ d.title }}</span>
+          <span class="user"
+            >翻译：{{ displayUser(d.tr.user)
+            }}<template v-if="d.trCsvTime">
+              · {{ formatGmt8(d.trCsvTime) }}</template
+            ></span
+          >
+          <span class="user"
+            >校对：{{ displayUser(d.pr.user)
+            }}<template v-if="d.prCsvTime">
+              · {{ formatGmt8(d.prCsvTime) }}</template
+            ></span
+          >
+          <n-button size="tiny" @click="downloadCsv(d)">下载CSV</n-button>
+          <n-button size="tiny" @click="downloadChineseTxt(d)"
+            >下载TXT</n-button
+          >
+          <n-button size="tiny" @click="openEditor(d, 'tr')">重新翻译</n-button>
+          <n-button size="tiny" @click="openEditor(d, 'pr')">
+            重新校对
+          </n-button>
+        </div>
+        <n-empty
+          v-if="!loading && !filteredRows.length"
+          :description="
+            rows.length ? '没有符合筛选条件的文件' : '暂无已完成文件'
+          "
+        />
+      </doc-filters>
     </template>
   </div>
 </template>
@@ -44,6 +55,7 @@ import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NAlert } from 'naive-ui'
 import FileSaver from 'file-saver'
 import PushHeader from '../translate/push/PushHeader.vue'
+import DocFilters from './DocFilters.vue'
 import { store } from '../../store'
 import { extractInfoFromCsvText } from '../../helper/csv'
 import { displayUser, loadUsers } from '../../helper/users'

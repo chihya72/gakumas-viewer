@@ -44,189 +44,202 @@
 
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
 
-      <div v-if="rows.length" class="table-scroll">
-        <table class="grid">
-          <colgroup>
-            <col class="sel-col" />
-            <col class="source-col" />
-            <col />
-            <col class="track-col" />
-            <col class="track-col" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th class="sel-col">
-                <n-checkbox
-                  :checked="allSelected"
-                  @update:checked="toggleAll"
-                />
-              </th>
-              <th>入库</th>
-              <th>剧情</th>
-              <th>翻译</th>
-              <th>校对</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="d in rows" :key="d.number" :class="{ mine: isMine(d) }">
-              <td class="sel-col">
-                <n-checkbox
-                  :checked="selected.has(d.number)"
-                  @update:checked="(v: boolean) => toggleSel(d.number, v)"
-                />
-              </td>
-              <td class="source-time">
-                {{ formatGmt8(d.sourceCommitTime || '') }}
-              </td>
-              <td class="doc">
-                <a href="javascript:;" @click="open(d)">{{ d.title }}</a>
-              </td>
-              <td>
-                <div class="track-line">
-                  <n-tag
-                    v-if="showTrStatus(d)"
-                    class="status-tag"
-                    size="small"
-                    :type="tagType(d.tr.state)"
-                    :bordered="false"
-                    :title="trackLabel(d.tr)"
-                  >
-                    {{ trackLabel(d.tr) }}
-                  </n-tag>
-                  <span v-if="showTrStatus(d) && d.trCsvTime" class="time">
-                    {{ formatGmt8(d.trCsvTime) }}
-                  </span>
-                  <n-button
-                    v-if="showTrDownload(d)"
-                    class="neutral-action"
-                    size="tiny"
-                    @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')"
-                  >
-                    下载机翻CSV
-                  </n-button>
-                  <n-button
-                    v-if="d.tr.state === '待认领'"
-                    size="tiny"
-                    type="info"
-                    :disabled="busy === d.number"
-                    @click="claim(d, 'tr')"
-                  >
-                    {{ busy === d.number ? busyText : '认领' }}
-                  </n-button>
-                  <n-button
-                    v-if="canAiComplete(d)"
-                    size="tiny"
-                    type="warning"
-                    :disabled="busy === d.number"
-                    @click="aiComplete(d)"
-                  >
-                    {{ busy === d.number ? busyText : '采用AI稿' }}
-                  </n-button>
-                  <n-button
-                    v-if="d.tr.user === me && d.tr.state === '进行中'"
-                    size="tiny"
-                    type="primary"
-                    @click="open(d, 'tr')"
-                  >
-                    开始翻译
-                  </n-button>
-                  <n-button
-                    v-if="d.tr.user === me && d.tr.state === '进行中'"
-                    size="tiny"
-                    type="primary"
-                    :disabled="busy === d.number"
-                    @click="pickCsvUpload(d, 'tr')"
-                  >
-                    {{ busy === d.number ? busyText : '上传翻译CSV' }}
-                  </n-button>
-                  <n-button
-                    v-if="showTrDownload(d) && d.tr.state === '完成'"
-                    class="neutral-action"
-                    size="tiny"
-                    @click="open(d, 'tr')"
-                  >
-                    重新翻译
-                  </n-button>
-                </div>
-              </td>
-              <td>
-                <div class="track-line">
-                  <n-tag
-                    v-if="showPrStatus(d)"
-                    class="status-tag"
-                    size="small"
-                    :type="
-                      d.tr.state === '完成' ? tagType(d.pr.state) : 'default'
-                    "
-                    :bordered="false"
-                    :title="prCellLabel(d)"
-                  >
-                    {{ prCellLabel(d) }}
-                  </n-tag>
-                  <span v-if="showPrStatus(d) && d.prCsvTime" class="time">
-                    {{ formatGmt8(d.prCsvTime) }}
-                  </span>
-                  <n-button
-                    v-if="d.pr.user === me && d.tr.state === '完成'"
-                    class="neutral-action"
-                    size="tiny"
-                    @click="downloadCsvPath(d.translatedPath, d.title, '翻译')"
-                  >
-                    下载翻译CSV
-                  </n-button>
-                  <n-button
-                    v-if="
-                      d.pr.user === me &&
-                      d.tr.state === '完成' &&
-                      d.pr.state === '完成'
-                    "
-                    class="neutral-action"
-                    size="tiny"
-                    @click="open(d, 'pr')"
-                  >
-                    重新校对
-                  </n-button>
-                  <n-button
-                    v-if="d.pr.state === '待认领'"
-                    size="tiny"
-                    type="info"
-                    :disabled="busy === d.number"
-                    @click="claim(d, 'pr')"
-                  >
-                    {{ busy === d.number ? busyText : '认领' }}
-                  </n-button>
-                  <n-button
-                    v-if="
-                      d.pr.user === me &&
-                      d.tr.state === '完成' &&
-                      d.pr.state !== '完成'
-                    "
-                    size="tiny"
-                    type="primary"
-                    @click="open(d, 'pr')"
-                  >
-                    开始校对
-                  </n-button>
-                  <n-button
-                    v-if="
-                      d.pr.user === me &&
-                      d.tr.state === '完成' &&
-                      d.pr.state !== '完成'
-                    "
-                    size="tiny"
-                    type="primary"
-                    :disabled="busy === d.number"
-                    @click="pickCsvUpload(d, 'pr')"
-                  >
-                    {{ busy === d.number ? busyText : '上传校对CSV' }}
-                  </n-button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <n-empty v-else-if="!loading" description="工作仓库暂无剧情" />
+      <doc-filters v-slot="{ rows: filteredRows }" :docs="rows">
+        <div v-if="filteredRows.length" class="table-scroll">
+          <table class="grid">
+            <colgroup>
+              <col class="sel-col" />
+              <col class="source-col" />
+              <col />
+              <col class="track-col" />
+              <col class="track-col" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="sel-col">
+                  <n-checkbox
+                    :checked="areAllSelected(filteredRows)"
+                    @update:checked="(v: boolean) => toggleAll(v, filteredRows)"
+                  />
+                </th>
+                <th>入库</th>
+                <th>剧情</th>
+                <th>翻译</th>
+                <th>校对</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="d in filteredRows"
+                :key="d.number"
+                :class="{ mine: isMine(d) }"
+              >
+                <td class="sel-col">
+                  <n-checkbox
+                    :checked="selected.has(d.number)"
+                    @update:checked="(v: boolean) => toggleSel(d.number, v)"
+                  />
+                </td>
+                <td class="source-time">
+                  {{ formatGmt8(d.sourceCommitTime || '') }}
+                </td>
+                <td class="doc">
+                  <a href="javascript:;" @click="open(d)">{{ d.title }}</a>
+                </td>
+                <td>
+                  <div class="track-line">
+                    <n-tag
+                      v-if="showTrStatus(d)"
+                      class="status-tag"
+                      size="small"
+                      :type="tagType(d.tr.state)"
+                      :bordered="false"
+                      :title="trackLabel(d.tr)"
+                    >
+                      {{ trackLabel(d.tr) }}
+                    </n-tag>
+                    <span v-if="showTrStatus(d) && d.trCsvTime" class="time">
+                      {{ formatGmt8(d.trCsvTime) }}
+                    </span>
+                    <n-button
+                      v-if="showTrDownload(d)"
+                      class="neutral-action"
+                      size="tiny"
+                      @click="downloadCsvPath(d.aiPath, d.title, 'AI机翻')"
+                    >
+                      下载机翻CSV
+                    </n-button>
+                    <n-button
+                      v-if="d.tr.state === '待认领'"
+                      size="tiny"
+                      type="info"
+                      :disabled="busy === d.number"
+                      @click="claim(d, 'tr')"
+                    >
+                      {{ busy === d.number ? busyText : '认领' }}
+                    </n-button>
+                    <n-button
+                      v-if="canAiComplete(d)"
+                      size="tiny"
+                      type="warning"
+                      :disabled="busy === d.number"
+                      @click="aiComplete(d)"
+                    >
+                      {{ busy === d.number ? busyText : '采用AI稿' }}
+                    </n-button>
+                    <n-button
+                      v-if="d.tr.user === me && d.tr.state === '进行中'"
+                      size="tiny"
+                      type="primary"
+                      @click="open(d, 'tr')"
+                    >
+                      开始翻译
+                    </n-button>
+                    <n-button
+                      v-if="d.tr.user === me && d.tr.state === '进行中'"
+                      size="tiny"
+                      type="primary"
+                      :disabled="busy === d.number"
+                      @click="pickCsvUpload(d, 'tr')"
+                    >
+                      {{ busy === d.number ? busyText : '上传翻译CSV' }}
+                    </n-button>
+                    <n-button
+                      v-if="showTrDownload(d) && d.tr.state === '完成'"
+                      class="neutral-action"
+                      size="tiny"
+                      @click="open(d, 'tr')"
+                    >
+                      重新翻译
+                    </n-button>
+                  </div>
+                </td>
+                <td>
+                  <div class="track-line">
+                    <n-tag
+                      v-if="showPrStatus(d)"
+                      class="status-tag"
+                      size="small"
+                      :type="
+                        d.tr.state === '完成' ? tagType(d.pr.state) : 'default'
+                      "
+                      :bordered="false"
+                      :title="prCellLabel(d)"
+                    >
+                      {{ prCellLabel(d) }}
+                    </n-tag>
+                    <span v-if="showPrStatus(d) && d.prCsvTime" class="time">
+                      {{ formatGmt8(d.prCsvTime) }}
+                    </span>
+                    <n-button
+                      v-if="d.pr.user === me && d.tr.state === '完成'"
+                      class="neutral-action"
+                      size="tiny"
+                      @click="
+                        downloadCsvPath(d.translatedPath, d.title, '翻译')
+                      "
+                    >
+                      下载翻译CSV
+                    </n-button>
+                    <n-button
+                      v-if="
+                        d.pr.user === me &&
+                        d.tr.state === '完成' &&
+                        d.pr.state === '完成'
+                      "
+                      class="neutral-action"
+                      size="tiny"
+                      @click="open(d, 'pr')"
+                    >
+                      重新校对
+                    </n-button>
+                    <n-button
+                      v-if="d.pr.state === '待认领'"
+                      size="tiny"
+                      type="info"
+                      :disabled="busy === d.number"
+                      @click="claim(d, 'pr')"
+                    >
+                      {{ busy === d.number ? busyText : '认领' }}
+                    </n-button>
+                    <n-button
+                      v-if="
+                        d.pr.user === me &&
+                        d.tr.state === '完成' &&
+                        d.pr.state !== '完成'
+                      "
+                      size="tiny"
+                      type="primary"
+                      @click="open(d, 'pr')"
+                    >
+                      开始校对
+                    </n-button>
+                    <n-button
+                      v-if="
+                        d.pr.user === me &&
+                        d.tr.state === '完成' &&
+                        d.pr.state !== '完成'
+                      "
+                      size="tiny"
+                      type="primary"
+                      :disabled="busy === d.number"
+                      @click="pickCsvUpload(d, 'pr')"
+                    >
+                      {{ busy === d.number ? busyText : '上传校对CSV' }}
+                    </n-button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <n-empty
+          v-else-if="!loading"
+          :description="
+            rows.length ? '没有符合筛选条件的文件' : '工作仓库暂无剧情'
+          "
+        />
+      </doc-filters>
     </template>
   </div>
 </template>
@@ -237,6 +250,7 @@ import { useRouter } from 'vue-router'
 import { NButton, NTag, NEmpty, NAlert, NCheckbox } from 'naive-ui'
 import { store } from '../../store'
 import PushHeader from '../translate/push/PushHeader.vue'
+import DocFilters from './DocFilters.vue'
 import FileSaver from 'file-saver'
 import { displayUser, loadUsers } from '../../helper/users'
 import { extractInfoFromCsvText, type CsvDataLine } from '../../helper/csv'
@@ -278,19 +292,21 @@ const activatedRefresh = () => {
 // 多选（批量认领用）
 const selected = ref<Set<number>>(new Set())
 
-const allSelected = computed(
-  () =>
-    rows.value.length > 0 &&
-    rows.value.every((d) => selected.value.has(d.number))
-)
+function areAllSelected(visible: DocTask[]) {
+  return (
+    visible.length > 0 && visible.every((d) => selected.value.has(d.number))
+  )
+}
 function toggleSel(n: number, v: boolean) {
   const s = new Set(selected.value)
   if (v) s.add(n)
   else s.delete(n)
   selected.value = s
 }
-function toggleAll(v: boolean) {
-  selected.value = v ? new Set(rows.value.map((d) => d.number)) : new Set()
+function toggleAll(v: boolean, visible: DocTask[]) {
+  const next = new Set(selected.value)
+  visible.forEach((d) => (v ? next.add(d.number) : next.delete(d.number)))
+  selected.value = next
 }
 
 // 批量认领：只处理该轨仍为"待认领"的行，其余静默跳过

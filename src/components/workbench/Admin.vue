@@ -9,6 +9,9 @@
         <n-button size="small" :loading="loading" @click="refresh"
           >刷新</n-button
         >
+        <n-button size="small" type="primary" @click="showUsers = true">
+          用户管理
+        </n-button>
       </div>
 
       <h3>我的个人ID</h3>
@@ -57,48 +60,54 @@
         </n-button>
       </div>
 
-      <h3>用户与个人ID</h3>
-      <div class="table-scroll">
-        <table class="grid users">
-          <thead>
-            <tr>
-              <th>GitHub ID</th>
-              <th>个人ID</th>
-              <th>权限</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(u, i) in userRows" :key="i">
-              <td><n-input v-model:value="u.github" size="small" /></td>
-              <td><n-input v-model:value="u.name" size="small" /></td>
-              <td>
-                <n-select
-                  v-model:value="u.role"
-                  size="small"
-                  :options="roleOptions"
-                />
-              </td>
-              <td>
-                <n-button size="tiny" @click="userRows.splice(i, 1)"
-                  >删除</n-button
-                >
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="user-actions">
-        <n-button size="small" @click="addUser">新增用户</n-button>
-        <n-button
-          size="small"
-          type="primary"
-          :loading="savingUsers"
-          @click="saveUserRows"
-        >
-          保存用户
-        </n-button>
-      </div>
+      <n-modal
+        v-model:show="showUsers"
+        preset="card"
+        title="用户管理"
+        style="width: min(1000px, calc(100vw - 32px))"
+      >
+        <div class="table-scroll">
+          <table class="grid users">
+            <thead>
+              <tr>
+                <th>GitHub ID</th>
+                <th>个人ID</th>
+                <th>权限</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(u, i) in userRows" :key="i">
+                <td><n-input v-model:value="u.github" size="small" /></td>
+                <td><n-input v-model:value="u.name" size="small" /></td>
+                <td>
+                  <n-select
+                    v-model:value="u.role"
+                    size="small"
+                    :options="roleOptions"
+                  />
+                </td>
+                <td>
+                  <n-button size="tiny" @click="userRows.splice(i, 1)">
+                    删除
+                  </n-button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="user-actions">
+          <n-button size="small" @click="addUser">新增用户</n-button>
+          <n-button
+            size="small"
+            type="primary"
+            :loading="savingUsers"
+            @click="saveUserRows"
+          >
+            保存用户
+          </n-button>
+        </div>
+      </n-modal>
 
       <div class="section-head">
         <h3>文件状态</h3>
@@ -121,105 +130,123 @@
           </n-button>
         </div>
       </div>
-      <div v-if="docs.length" class="table-scroll">
-        <table class="grid docs">
-          <thead>
-            <tr>
-              <th class="pick-col">
-                <n-checkbox
-                  :checked="allSelectableSelected"
-                  @update:checked="toggleAll"
-                />
-              </th>
-              <th>剧情</th>
-              <th>译者</th>
-              <th>翻译状态</th>
-              <th>校对者</th>
-              <th>校对状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="d in docs" :key="d.number">
-              <td class="pick-col">
-                <n-checkbox
-                  :checked="selected.has(d.number)"
-                  :disabled="isArchived(d)"
-                  @update:checked="(v: boolean) => toggleSelected(d.number, v)"
-                />
-              </td>
-              <td class="title">{{ d.title }}</td>
-              <td>
-                <n-select
-                  v-model:value="d.tr.user"
-                  size="small"
-                  :options="userOptions"
-                />
-              </td>
-              <td>
-                <n-select
-                  v-model:value="d.tr.state"
-                  size="small"
-                  :options="stateOptions"
-                />
-              </td>
-              <td>
-                <n-select
-                  v-model:value="d.pr.user"
-                  size="small"
-                  :options="userOptions"
-                />
-              </td>
-              <td>
-                <n-select
-                  v-model:value="d.pr.state"
-                  size="small"
-                  :options="stateOptions"
-                />
-              </td>
-              <td>
-                <div class="actions">
-                  <n-button
+      <doc-filters
+        v-slot="{ rows: filteredRows }"
+        :docs="docs"
+        :archived-numbers="archived"
+      >
+        <div v-if="filteredRows.length" class="table-scroll">
+          <table class="grid docs">
+            <thead>
+              <tr>
+                <th class="pick-col">
+                  <n-checkbox
+                    :checked="areAllSelectableSelected(filteredRows)"
+                    @update:checked="(v: boolean) => toggleAll(v, filteredRows)"
+                  />
+                </th>
+                <th>剧情</th>
+                <th>译者</th>
+                <th>翻译状态</th>
+                <th>校对者</th>
+                <th>校对状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="d in filteredRows" :key="d.number">
+                <td class="pick-col">
+                  <n-checkbox
+                    :checked="selected.has(d.number)"
+                    :disabled="isArchived(d)"
+                    @update:checked="(v: boolean) => toggleSelected(d.number, v)"
+                  />
+                </td>
+                <td class="title">{{ d.title }}</td>
+                <td>
+                  <n-select
+                    v-model:value="d.tr.user"
                     size="small"
-                    type="primary"
-                    :loading="busy === d.number"
-                    @click="saveDoc(d)"
-                  >
-                    保存
-                  </n-button>
-                  <n-button
-                    v-if="isArchived(d)"
+                    :options="userOptions"
+                  />
+                </td>
+                <td>
+                  <n-select
+                    v-model:value="d.tr.state"
                     size="small"
-                    type="success"
-                    :loading="busy === d.number"
-                    @click="restore(d)"
-                  >
-                    恢复
-                  </n-button>
-                  <n-button
-                    v-else
+                    :options="stateOptions"
+                  />
+                </td>
+                <td>
+                  <n-select
+                    v-model:value="d.pr.user"
                     size="small"
-                    type="warning"
-                    :loading="busy === d.number"
-                    @click="archive(d)"
-                  >
-                    过时存档
-                  </n-button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <n-empty v-else-if="!loading" description="暂无文件" />
+                    :options="userOptions"
+                  />
+                </td>
+                <td>
+                  <n-select
+                    v-model:value="d.pr.state"
+                    size="small"
+                    :options="stateOptions"
+                  />
+                </td>
+                <td>
+                  <div class="actions">
+                    <n-button
+                      size="small"
+                      type="primary"
+                      :loading="busy === d.number"
+                      @click="saveDoc(d)"
+                    >
+                      保存
+                    </n-button>
+                    <n-button
+                      v-if="isArchived(d)"
+                      size="small"
+                      type="success"
+                      :loading="busy === d.number"
+                      @click="restore(d)"
+                    >
+                      恢复
+                    </n-button>
+                    <n-button
+                      v-else
+                      size="small"
+                      type="warning"
+                      :loading="busy === d.number"
+                      @click="archive(d)"
+                    >
+                      过时存档
+                    </n-button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <n-empty
+          v-else-if="!loading"
+          :description="docs.length ? '没有符合筛选条件的文件' : '暂无文件'"
+        />
+      </doc-filters>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onActivated, onMounted, ref, watch } from 'vue'
-import { NAlert, NButton, NCheckbox, NEmpty, NInput, NSelect } from 'naive-ui'
+import {
+  NAlert,
+  NButton,
+  NCheckbox,
+  NEmpty,
+  NInput,
+  NModal,
+  NSelect,
+} from 'naive-ui'
 import PushHeader from '../translate/push/PushHeader.vue'
+import DocFilters from './DocFilters.vue'
 import { store } from '../../store'
 import {
   users,
@@ -258,6 +285,7 @@ const batching = ref(false)
 const batchSaving = ref(false)
 const uploading = ref(false)
 const busy = ref<number | null>(null)
+const showUsers = ref(false)
 const error = ref('')
 const docs = ref<DocTask[]>([])
 const archived = ref<Set<number>>(new Set())
@@ -271,12 +299,6 @@ const uploadStage = ref<'ai' | 'translated' | 'proofread'>('ai')
 const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
 const canAdmin = computed(() => isAdmin(me.value))
 const selectedCount = computed(() => selected.value.size)
-const selectableDocs = computed(() => docs.value.filter((d) => !isArchived(d)))
-const allSelectableSelected = computed(
-  () =>
-    selectableDocs.value.length > 0 &&
-    selectableDocs.value.every((d) => selected.value.has(d.number))
-)
 const canUpload = computed(
   () => !!uploadFile.value && !!uploadTitle.value.trim()
 )
@@ -319,10 +341,19 @@ function toggleSelected(n: number, v: boolean) {
   v ? next.add(n) : next.delete(n)
   selected.value = next
 }
-function toggleAll(v: boolean) {
-  selected.value = v
-    ? new Set(selectableDocs.value.map((d) => d.number))
-    : new Set()
+function areAllSelectableSelected(visible: DocTask[]) {
+  const selectable = visible.filter((d) => !isArchived(d))
+  return (
+    selectable.length > 0 &&
+    selectable.every((d) => selected.value.has(d.number))
+  )
+}
+function toggleAll(v: boolean, visible: DocTask[]) {
+  const next = new Set(selected.value)
+  visible
+    .filter((d) => !isArchived(d))
+    .forEach((d) => (v ? next.add(d.number) : next.delete(d.number)))
+  selected.value = next
 }
 
 async function refresh() {
