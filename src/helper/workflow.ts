@@ -398,6 +398,10 @@ function htmlTags(text: string): string[] {
   return text.match(HTML_TAG_RE) || []
 }
 
+function htmlTagStructure(tags: string[]): string {
+  return tags.map((tag) => tag.replace(/\\=[^>]*/, '\\=')).join('\u0000')
+}
+
 export function validateRowsHtmlTags(
   rows: { id: string; text: string; trans: string }[]
 ): string[] {
@@ -406,7 +410,7 @@ export function validateRowsHtmlTags(
     if (row.id === 'info' || row.id === '译者' || !row.trans) return
     const src = htmlTags(row.text)
     const dst = htmlTags(row.trans)
-    if (src.join('\u0000') !== dst.join('\u0000')) {
+    if (htmlTagStructure(src) !== htmlTagStructure(dst)) {
       errors.push(
         `第 ${i + 2} 行标签不一致：原文[${src.join(' ')}] 译文[${dst.join(
           ' '
@@ -423,7 +427,7 @@ export function validateTextHtmlTags(
 ): string[] {
   const src = htmlTags(rawTxt)
   const dst = htmlTags(outputTxt)
-  return src.join('\u0000') === dst.join('\u0000')
+  return htmlTagStructure(src) === htmlTagStructure(dst)
     ? []
     : [`原始TXT有 ${src.length} 个标签，输出TXT有 ${dst.length} 个标签`]
 }
