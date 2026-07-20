@@ -398,8 +398,19 @@ function htmlTags(text: string): string[] {
   return text.match(HTML_TAG_RE) || []
 }
 
-function htmlTagStructure(tags: string[]): string {
-  return tags.map((tag) => tag.replace(/\\=[^>]*/, '\\=')).join('\u0000')
+function htmlTagStructure(tags: string[]): string[] {
+  return tags.map((tag) => tag.replace(/\\=[^>]*/, '\\='))
+}
+
+function htmlTagsAreOrderedSubset(src: string[], dst: string[]): boolean {
+  const source = htmlTagStructure(src)
+  let start = 0
+  return htmlTagStructure(dst).every((tag) => {
+    const match = source.indexOf(tag, start)
+    if (match < 0) return false
+    start = match + 1
+    return true
+  })
 }
 
 export function validateRowsHtmlTags(
@@ -410,7 +421,10 @@ export function validateRowsHtmlTags(
     if (row.id === 'info' || row.id === '译者' || !row.trans) return
     const src = htmlTags(row.text)
     const dst = htmlTags(row.trans)
-    if (htmlTagStructure(src) !== htmlTagStructure(dst)) {
+    if (
+      dst.length &&
+      (src.length !== dst.length || !htmlTagsAreOrderedSubset(src, dst))
+    ) {
       errors.push(
         `第 ${i + 2} 行标签不一致：原文[${src.join(' ')}] 译文[${dst.join(
           ' '
@@ -427,7 +441,7 @@ export function validateTextHtmlTags(
 ): string[] {
   const src = htmlTags(rawTxt)
   const dst = htmlTags(outputTxt)
-  return htmlTagStructure(src) === htmlTagStructure(dst)
+  return htmlTagsAreOrderedSubset(src, dst)
     ? []
     : [`原始TXT有 ${src.length} 个标签，输出TXT有 ${dst.length} 个标签`]
 }
