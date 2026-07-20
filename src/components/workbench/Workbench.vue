@@ -539,7 +539,7 @@ async function uploadCsv(d: DocTask, role: TrackKey, file: File) {
     const tagErrors = validateRowsHtmlTags(uploaded.data)
     if (tagErrors.length)
       throw new Error(
-        `HTML标签不一致，禁止上传：\n${tagErrors.slice(0, 5).join('\n')}`
+        `HTML标签无效，禁止上传：\n${tagErrors.slice(0, 5).join('\n')}`
       )
     await pushContentToWorkPath(
       store.octokitWrapper,

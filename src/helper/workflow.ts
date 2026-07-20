@@ -398,19 +398,17 @@ function htmlTags(text: string): string[] {
   return text.match(HTML_TAG_RE) || []
 }
 
-function htmlTagStructure(tags: string[]): string[] {
-  return tags.map((tag) => tag.replace(/\\=[^>]*/, '\\='))
-}
-
-function htmlTagsAreOrderedSubset(src: string[], dst: string[]): boolean {
-  const source = htmlTagStructure(src)
-  let start = 0
-  return htmlTagStructure(dst).every((tag) => {
-    const match = source.indexOf(tag, start)
-    if (match < 0) return false
-    start = match + 1
-    return true
-  })
+function htmlTagsAreBalanced(tags: string[]): boolean {
+  const opens: string[] = []
+  return (
+    tags.every((tag) => {
+      const match = /^<\/?([A-Za-z][A-Za-z0-9_:-]*)/.exec(tag)
+      if (!match) return false
+      if (tag.startsWith('</')) return opens.pop() === match[1]
+      opens.push(match[1])
+      return true
+    }) && !opens.length
+  )
 }
 
 export function validateRowsHtmlTags(
@@ -419,16 +417,10 @@ export function validateRowsHtmlTags(
   const errors: string[] = []
   rows.forEach((row, i) => {
     if (row.id === 'info' || row.id === '译者' || !row.trans) return
-    const src = htmlTags(row.text)
     const dst = htmlTags(row.trans)
-    if (
-      dst.length &&
-      (src.length !== dst.length || !htmlTagsAreOrderedSubset(src, dst))
-    ) {
+    if (!htmlTagsAreBalanced(dst)) {
       errors.push(
-        `第 ${i + 2} 行标签不一致：原文[${src.join(' ')}] 译文[${dst.join(
-          ' '
-        )}]`
+        `第 ${i + 2} 行译文标签无效：[${dst.join(' ')}]`
       )
     }
   })
@@ -436,14 +428,11 @@ export function validateRowsHtmlTags(
 }
 
 export function validateTextHtmlTags(
-  rawTxt: string,
+  _rawTxt: string,
   outputTxt: string
 ): string[] {
-  const src = htmlTags(rawTxt)
   const dst = htmlTags(outputTxt)
-  return htmlTagsAreOrderedSubset(src, dst)
-    ? []
-    : [`原始TXT有 ${src.length} 个标签，输出TXT有 ${dst.length} 个标签`]
+  return htmlTagsAreBalanced(dst) ? [] : ['输出TXT标签无效']
 }
 
 // 移植自本地 merger.process_chinese_only：把 CSV 译文回填进原始 txt，生成纯中文 txt。

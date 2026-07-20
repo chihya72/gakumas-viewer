@@ -218,7 +218,7 @@ async function pushCurrent(silent = false) {
   const { data } = extractInfoFromCsvText(base64ToUtf8(store.base64content))
   const tagErrors = validateRowsHtmlTags(data)
   if (tagErrors.length) {
-    alert(`HTML标签不一致，禁止保存：\n${tagErrors.slice(0, 5).join('\n')}`)
+    alert(`HTML标签无效，禁止保存：\n${tagErrors.slice(0, 5).join('\n')}`)
     return false
   }
   try {
