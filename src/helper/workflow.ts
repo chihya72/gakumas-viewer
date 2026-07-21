@@ -250,7 +250,14 @@ export function setTrackInBody(
   key: TrackKey,
   t: Track
 ): string {
-  const marker = `<!-- ${key}:${t.user}:${t.state} -->`
+  const user =
+    Object.entries(workUsers).find(
+      ([id, item]) =>
+        id === t.user ||
+        item.github?.toLocaleLowerCase() === t.user.toLocaleLowerCase() ||
+        (t.user.startsWith('qq-') && item.qq === t.user.slice(3))
+    )?.[0] || t.user
+  const marker = `<!-- ${key}:${user}:${t.state} -->`
   const re = markerRe(key)
   const b = body || ''
   if (re.test(b)) return b.replace(re, marker)
