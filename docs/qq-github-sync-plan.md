@@ -77,7 +77,7 @@ SSH 用户：pm
 - [x] `pevent` 首次同步：Bot 已写入 1101 个文件；上游六类清单为 `cidol 318 / csprt 493 / dear 455 / event 136 / pstory 608 / pevent 1101`。
 - [x] CSV 同步提速：单类文件同步改为 8 路有限并发，`pevent` 首次全量同步实测约 107 秒完成。
 - [x] QQ 认领联动：`翻译占坑`、`校对占坑` 同时更新 GitHub Issue 与 `records/<file_id>.json`；翻译认领优先发送 `ai_csv` 机翻稿，无机翻时回退原文 CSV。
-- [x] 单端身份兼容：QQ-only 用户以 `qq-<QQ号>` 作为稳定键，JSON 保存 QQ 号并显示群 ID；GitHub-only 用户继续保存 login。合成 QQ 身份不写入 GitHub assignees。
+- [x] 单端身份兼容：`users.json` 以必填且唯一的个人 ID 为键，GitHub ID 与 QQ 号至少填写一项；不再把 `qq-<QQ号>` 伪装成 GitHub ID。
 - [x] 历史回填：`adv_dear_hski_037` 的校对稿已按 QQ `948279048` / “煉金術式”补写 Issue、JSON 记录、`users.json` 与校对 CSV。
 - [ ] 阶段 4 以后：实现草稿恢复、版本冲突、正式稿原子轮换和 GitHub 暂时不可用时的 outbox 重试。
 
@@ -341,18 +341,27 @@ GitHub 官方文档说明，Contents API 的并发文件操作需要串行处理
 
 ```json
 {
-  "github_user": {
-    "name": "显示名",
+  "悸动": {
+    "github": "kkdou3",
     "role": "user",
-    "qq": "123456789"
+    "qq": ""
+  },
+  "煉金術式": {
+    "github": "",
+    "role": "user",
+    "qq": "948279048"
   }
 }
 ```
 
 规则：
 
-- Bot 只认真实 QQ 号。
-- 网页只认 GitHub login。
+- 顶层键是必填、唯一的个人 ID。
+- `github` 与 `qq` 至少填写一项；GitHub ID 不区分大小写且不可重复，QQ 号必须是唯一的纯数字。
+- 只有 QQ 号的用户只能在 QQ 操作，其操作仍写入 GitHub 记录，但不能登录网页编辑。
+- 只有 GitHub ID 的用户只能在网页操作，不能在 QQ 使用需要注册的命令。
+- 两项都有时，两端操作归并为同一身份。
+- Issue 内部允许用 `qq-<QQ号>` 标记 QQ-only 操作者，但该值不是 GitHub ID，也不进入 GitHub assignees。
 - 显示群内 ID 或 GitHub ID，但显示字段不参与鉴权。
 - 工作仓库最好设为私有，避免公开 QQ 映射。
 - Bot Token 放环境变量，不能写入仓库。

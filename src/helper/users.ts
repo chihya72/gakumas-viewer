@@ -3,13 +3,13 @@ import { WORK_BRANCH, WORK_OWNER, WORK_REPO } from './workflow'
 
 export type UserRole = 'user' | 'admin'
 export interface WorkUser {
-  name: string
   role: UserRole
+  github?: string
   qq?: string
 }
 
 export const users = reactive<Record<string, WorkUser>>({
-  chihya72: { name: 'pm', role: 'admin' },
+  pm: { github: 'chihya72', role: 'admin' },
 })
 
 function b64DecodeUtf8(b64: string): string {
@@ -25,6 +25,26 @@ function b64EncodeUtf8(str: string): string {
   return btoa(bin)
 }
 
+function normalizeUsers(value: any): Record<string, WorkUser> {
+  const result: Record<string, WorkUser> = {}
+  Object.entries(value || {}).forEach(([key, raw]: [string, any]) => {
+    const legacy = raw?.github === undefined
+    const id = String(legacy ? raw?.name || key : key).trim()
+    const github = String(
+      legacy ? (key.startsWith('qq-') ? '' : key) : raw?.github || ''
+    ).trim()
+    const qq = String(raw?.qq || '').trim()
+    if (!id || (!github && !qq)) return
+    if (result[id]) throw new Error(`个人 ID 重复：${id}`)
+    result[id] = {
+      role: raw?.role === 'admin' ? 'admin' : 'user',
+      github,
+      qq,
+    }
+  })
+  return result
+}
+
 export async function loadUsers(wrapper: any, bustCache = false) {
   try {
     const data = await wrapper.getContent(
@@ -34,7 +54,9 @@ export async function loadUsers(wrapper: any, bustCache = false) {
       'users.json',
       bustCache
     )
-    Object.assign(users, JSON.parse(b64DecodeUtf8(data.content)))
+    const next = normalizeUsers(JSON.parse(b64DecodeUtf8(data.content)))
+    Object.keys(users).forEach((key) => delete users[key])
+    Object.assign(users, next)
   } catch (e: any) {
     if (e?.response?.status !== 404) throw e
   }
@@ -55,20 +77,37 @@ export async function saveUsers(wrapper: any, next: Record<string, WorkUser>) {
 
 export async function saveMyName(wrapper: any, github: string, name: string) {
   await loadUsers(wrapper)
-  await saveUsers(wrapper, {
-    ...users,
-    [github]: {
-      name: name.trim() || github,
-      role: users[github]?.role || 'user',
-      qq: users[github]?.qq || '',
-    },
-  })
+  const current = Object.entries(users).find(
+    ([, user]) => user.github?.toLocaleLowerCase() === github.toLocaleLowerCase()
+  )
+  const id = name.trim() || github
+  if (users[id] && current?.[0] !== id) throw new Error(`个人 ID 已存在：${id}`)
+  const next = { ...users }
+  if (current) delete next[current[0]]
+  next[id] = {
+    role: current?.[1].role || 'user',
+    github,
+    qq: current?.[1].qq || '',
+  }
+  await saveUsers(wrapper, next)
 }
 
 export function displayUser(user: string): string {
-  return users[user]?.name || user
+  const value = user.trim()
+  const qq = value.startsWith('qq-') ? value.slice(3) : ''
+  return (
+    Object.entries(users).find(
+      ([, item]) =>
+        (!!qq && item.qq === qq) ||
+        item.github?.toLocaleLowerCase() === value.toLocaleLowerCase()
+    )?.[0] || value
+  )
 }
 
 export function isAdmin(user: string): boolean {
-  return users[user]?.role === 'admin'
+  return Object.values(users).some(
+    (item) =>
+      item.role === 'admin' &&
+      item.github?.toLocaleLowerCase() === user.toLocaleLowerCase()
+  )
 }

@@ -66,22 +66,54 @@
         title="用户管理"
         style="width: min(1000px, calc(100vw - 32px))"
       >
+        <n-alert
+          v-if="userError"
+          type="error"
+          :bordered="false"
+          class="user-rule"
+        >
+          {{ userError }}
+        </n-alert>
+        <n-alert type="info" :bordered="false" class="user-rule">
+          每名用户必须填写唯一的个人 ID；GitHub ID 与 QQ 号至少填写一项。
+        </n-alert>
         <div class="table-scroll">
           <table class="grid users">
             <thead>
               <tr>
-                <th>GitHub ID</th>
-                <th>个人ID</th>
-                <th>QQ号</th>
+                <th>个人 ID（必填）</th>
+                <th>GitHub ID（可选）</th>
+                <th>QQ 号（可选）</th>
                 <th>权限</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(u, i) in userRows" :key="i">
-                <td><n-input v-model:value="u.github" size="small" /></td>
-                <td><n-input v-model:value="u.name" size="small" /></td>
-                <td><n-input v-model:value="u.qq" size="small" /></td>
+                <td>
+                  <n-input
+                    v-model:value="u.id"
+                    size="small"
+                    aria-label="个人 ID"
+                    placeholder="必填"
+                  />
+                </td>
+                <td>
+                  <n-input
+                    v-model:value="u.github"
+                    size="small"
+                    aria-label="GitHub ID"
+                    placeholder="可留空"
+                  />
+                </td>
+                <td>
+                  <n-input
+                    v-model:value="u.qq"
+                    size="small"
+                    aria-label="QQ 号"
+                    placeholder="可留空"
+                  />
+                </td>
                 <td>
                   <n-select
                     v-model:value="u.role"
@@ -252,6 +284,7 @@ import DocFilters from './DocFilters.vue'
 import { store } from '../../store'
 import {
   users,
+  displayUser,
   isAdmin,
   loadUsers,
   saveMyName,
@@ -275,8 +308,8 @@ import {
 } from '../../helper/workflow'
 
 interface UserRow {
+  id: string
   github: string
-  name: string
   role: UserRole
   qq: string
 }
@@ -289,6 +322,7 @@ const batchSaving = ref(false)
 const uploading = ref(false)
 const busy = ref<number | null>(null)
 const showUsers = ref(false)
+const userError = ref('')
 const error = ref('')
 const docs = ref<DocTask[]>([])
 const archived = ref<Set<number>>(new Set())
@@ -319,26 +353,28 @@ const uploadStageOptions = [
 ]
 const userOptions = computed(() => [
   { label: '未认领', value: '' },
-  ...Object.entries(users).map(([github, u]) => ({
-    label: `${u.name} (${github})`,
-    value: github,
-  })),
+  ...Object.entries(users)
+    .map(([id, u]) => ({
+      label: `${id} (${u.github ? `GitHub: ${u.github}` : `QQ: ${u.qq}`})`,
+      value: u.github || (u.qq ? `qq-${u.qq}` : ''),
+    }))
+    .filter((option) => option.value),
 ])
 
 function syncUserRows() {
   userRows.value = Object.entries(users)
-    .map(([github, u]) => ({
-      github,
-      name: u.name,
+    .map(([id, u]) => ({
+      id,
+      github: u.github || '',
       role: u.role,
       qq: u.qq || '',
     }))
-    .sort((a, b) => a.github.localeCompare(b.github))
-  myName.value = users[me.value]?.name || me.value
+    .sort((a, b) => a.id.localeCompare(b.id))
+  myName.value = displayUser(me.value)
 }
 
 function addUser() {
-  userRows.value.push({ github: '', name: '', role: 'user', qq: '' })
+  userRows.value.push({ id: '', github: '', role: 'user', qq: '' })
 }
 
 function isArchived(d: DocTask) {
@@ -408,12 +444,28 @@ async function saveMe() {
 async function saveUserRows() {
   if (!store.octokitWrapper) return
   const next: Record<string, WorkUser> = {}
-  for (const u of userRows.value) {
+  const githubIds = new Set<string>()
+  const qqIds = new Set<string>()
+  for (const [index, u] of userRows.value.entries()) {
+    const id = u.id.trim()
     const github = u.github.trim()
-    const name = u.name.trim()
-    if (!github) continue
-    next[github] = { name: name || github, role: u.role, qq: u.qq.trim() }
+    const qq = u.qq.trim()
+    const row = `第 ${index + 1} 行`
+    if (!id) return void (userError.value = `${row}缺少个人 ID`)
+    if (!github && !qq)
+      return void (userError.value = `${row}至少填写 GitHub ID 或 QQ 号`)
+    if (qq && !/^\d+$/.test(qq))
+      return void (userError.value = `${row}的 QQ 号只能包含数字`)
+    if (next[id]) return void (userError.value = `个人 ID 重复：${id}`)
+    const githubKey = github.toLocaleLowerCase()
+    if (github && githubIds.has(githubKey))
+      return void (userError.value = `GitHub ID 重复：${github}`)
+    if (qq && qqIds.has(qq)) return void (userError.value = `QQ 号重复：${qq}`)
+    if (github) githubIds.add(githubKey)
+    if (qq) qqIds.add(qq)
+    next[id] = { github, role: u.role, qq }
   }
+  userError.value = ''
   savingUsers.value = true
   try {
     await saveUsers(store.octokitWrapper, next)
@@ -584,6 +636,9 @@ h3 {
 }
 .user-actions {
   margin-bottom: 10px;
+}
+.user-rule {
+  margin-bottom: 8px;
 }
 .section-head {
   justify-content: space-between;

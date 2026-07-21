@@ -454,7 +454,13 @@ export async function updateWorkRecord(
       'users.json'
     )
     const workUsers = JSON.parse(base64ToUtf8(userFile.content))
-    operatorQq = String(workUsers?.[operatorGithub]?.qq || '').trim()
+    const matched = Object.entries(workUsers || {}).find(
+      ([key, user]: [string, any]) =>
+        String(user?.github === undefined ? key : user.github)
+          .trim()
+          .toLocaleLowerCase() === operatorGithub.toLocaleLowerCase()
+    )
+    operatorQq = String((matched?.[1] as any)?.qq || '').trim()
   } catch {
     /* 身份映射不可用时仍保留 GitHub 操作者 */
   }
