@@ -45,6 +45,7 @@ import {
   applyTrack,
   pushContentToSource,
   pushContentToWorkPath,
+  updateWorkRecord,
   completionPath,
   validateRowsHtmlTags,
   type MyStatus,
@@ -260,11 +261,19 @@ async function onCompleteClick() {
       /\.csv$/,
       ''
     )
+    const outputPath = completionPath(path, title, role)
     await pushContentToWorkPath(
       store.octokitWrapper,
-      completionPath(path, title, role),
+      outputPath,
       content,
       `${TRACK_LABEL[role]}完成 ${store.jsonUrl}`
+    )
+    await updateWorkRecord(
+      store.octokitWrapper,
+      title,
+      role,
+      me.value,
+      outputPath
     )
     await applyTrack(store.octokitWrapper, issueNumber.value, role, {
       user: me.value,

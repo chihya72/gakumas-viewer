@@ -194,6 +194,13 @@ export async function aiCompleteTranslation(
     `一键完成翻译(AI) ${doc.translatedPath}`,
     b64
   )
+  await updateWorkRecord(
+    wrapper,
+    doc.translatedPath.replace(/^translated_csv\//, '').replace(/\.csv$/, '').split('/').join('_'),
+    'tr',
+    aiName,
+    doc.translatedPath
+  )
   const body = setTrackInBody(issue.body, 'tr', {
     user: aiName,
     state: '完成',
@@ -410,6 +417,84 @@ function htmlTagsAreBalanced(tags: string[]): boolean {
       opens.push(match[1])
       return true
     }) && !opens.length
+  )
+}
+
+function utf8ToBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text)
+  let binary = ''
+  bytes.forEach((byte) => (binary += String.fromCharCode(byte)))
+  return btoa(binary)
+}
+
+function base64ToUtf8(value: string): string {
+  const bin = atob(String(value || '').replace(/\n/g, ''))
+  return new TextDecoder().decode(Uint8Array.from(bin, (char) => char.charCodeAt(0)))
+}
+
+export async function updateWorkRecord(
+  wrapper: any,
+  fileId: string,
+  role: TrackKey,
+  operatorGithub: string,
+  artifactPath: string
+) {
+  const recordPath = `records/${fileId}.json`
+  let record: any = {
+    schema_version: 1,
+    file_id: fileId,
+    batch: '',
+    category: artifactPath.split('/')[1] || '',
+    force_complete: { translation: false, proofread: false },
+    translation: { revision: 0, draft_revision: 0 },
+    proofread: { revision: 0, draft_revision: 0 },
+    artifacts: {},
+  }
+  try {
+    const current = await wrapper.getContent(
+      WORK_OWNER,
+      WORK_REPO,
+      WORK_BRANCH,
+      recordPath,
+      true
+    )
+    record = JSON.parse(base64ToUtf8(current.content))
+  } catch (error: any) {
+    if (error?.response?.status !== 404) throw error
+  }
+  const now = new Date().toISOString()
+  const key = role === 'tr' ? 'translation' : 'proofread'
+  const artifactKey = role === 'tr' ? 'translation_csv' : 'proofread_csv'
+  const track = record[key] || {}
+  record[key] = {
+    ...track,
+    revision: Number(track.revision || 0) + 1,
+    draft_revision: Number(track.draft_revision || 0),
+    state: '完成',
+    operator_qq: '',
+    operator_github: operatorGithub,
+    display_id: operatorGithub,
+    display_source: 'github',
+    timestamp: now,
+  }
+  record.artifacts = record.artifacts || {}
+  record.artifacts[artifactKey] = {
+    ...(record.artifacts[artifactKey] || {}),
+    path: artifactPath,
+    operator_qq: '',
+    operator_github: operatorGithub,
+    display_id: operatorGithub,
+    display_source: 'github',
+    timestamp: now,
+  }
+  record.github = { ...(record.github || {}), updated_at: now }
+  await wrapper.updateContent(
+    WORK_OWNER,
+    WORK_REPO,
+    WORK_BRANCH,
+    recordPath,
+    `${TRACK_LABEL[role]}记录 ${fileId}`,
+    utf8ToBase64(JSON.stringify(record, null, 2) + '\n')
   )
 }
 
