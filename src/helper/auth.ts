@@ -44,7 +44,6 @@ class OctokitWrapper {
   request: RequestInterface
   headers = {
     'X-GitHub-Api-Version': '2022-11-28',
-    'Cache-Control': 'private, no-store, max-age=0',
   }
   userMeta: {
     username: string

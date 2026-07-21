@@ -72,6 +72,7 @@
               <tr>
                 <th>GitHub ID</th>
                 <th>个人ID</th>
+                <th>QQ号</th>
                 <th>权限</th>
                 <th></th>
               </tr>
@@ -80,6 +81,7 @@
               <tr v-for="(u, i) in userRows" :key="i">
                 <td><n-input v-model:value="u.github" size="small" /></td>
                 <td><n-input v-model:value="u.name" size="small" /></td>
+                <td><n-input v-model:value="u.qq" size="small" /></td>
                 <td>
                   <n-select
                     v-model:value="u.role"
@@ -276,6 +278,7 @@ interface UserRow {
   github: string
   name: string
   role: UserRole
+  qq: string
 }
 
 const loading = ref(false)
@@ -295,6 +298,7 @@ const myName = ref('')
 const uploadFile = ref<File | null>(null)
 const uploadTitle = ref('')
 const uploadStage = ref<'ai' | 'translated' | 'proofread'>('ai')
+let lastRefreshAt = 0
 
 const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
 const canAdmin = computed(() => isAdmin(me.value))
@@ -323,13 +327,18 @@ const userOptions = computed(() => [
 
 function syncUserRows() {
   userRows.value = Object.entries(users)
-    .map(([github, u]) => ({ github, name: u.name, role: u.role }))
+    .map(([github, u]) => ({
+      github,
+      name: u.name,
+      role: u.role,
+      qq: u.qq || '',
+    }))
     .sort((a, b) => a.github.localeCompare(b.github))
   myName.value = users[me.value]?.name || me.value
 }
 
 function addUser() {
-  userRows.value.push({ github: '', name: '', role: 'user' })
+  userRows.value.push({ github: '', name: '', role: 'user', qq: '' })
 }
 
 function isArchived(d: DocTask) {
@@ -362,15 +371,11 @@ async function refresh() {
   loading.value = true
   error.value = ''
   try {
-    await loadUsers(store.octokitWrapper)
+    const [, issues] = await Promise.all([
+      loadUsers(store.octokitWrapper),
+      store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO, { state: 'all' }),
+    ])
     syncUserRows()
-    const issues = await store.octokitWrapper.listIssues(
-      WORK_OWNER,
-      WORK_REPO,
-      {
-        state: 'all',
-      }
-    )
     const nextArchived = new Set<number>()
     docs.value = (issues as any[])
       .filter((i) => !i.pull_request)
@@ -381,6 +386,7 @@ async function refresh() {
       .sort((a, b) => a.title.localeCompare(b.title))
     archived.value = nextArchived
     selected.value = new Set()
+    lastRefreshAt = Date.now()
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}`
   }
@@ -406,7 +412,7 @@ async function saveUserRows() {
     const github = u.github.trim()
     const name = u.name.trim()
     if (!github) continue
-    next[github] = { name: name || github, role: u.role }
+    next[github] = { name: name || github, role: u.role, qq: u.qq.trim() }
   }
   savingUsers.value = true
   try {
@@ -538,7 +544,7 @@ onMounted(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
 onActivated(() => {
-  if (store.octokitWrapper?.userMeta) refresh()
+  if (store.octokitWrapper?.userMeta && Date.now() - lastRefreshAt > 30_000) refresh()
 })
 </script>
 

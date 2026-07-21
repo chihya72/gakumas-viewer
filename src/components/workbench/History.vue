@@ -67,8 +67,6 @@ import {
   editorUrlForPath,
   fetchNameDict,
   fetchRawTxt,
-  fileCommitTime,
-  fillDocSourceCommitTimes,
   formatGmt8,
   isArchivedIssue,
   workRawUrl,
@@ -80,6 +78,7 @@ const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 const rows = ref<DocTask[]>([])
+let lastRefreshAt = 0
 
 // 重新修改：打开已完成阶段文件；再次完成会把对应作者更新为当前用户。
 function openEditor(d: DocTask, role: TrackKey) {
@@ -97,29 +96,14 @@ async function refresh() {
   loading.value = true
   error.value = ''
   try {
-    await loadUsers(store.octokitWrapper)
-    const issues = await store.octokitWrapper.listIssues(
-      WORK_OWNER,
-      WORK_REPO,
-      {
-        state: 'closed',
-      }
-    )
+    const [, issues] = await Promise.all([
+      loadUsers(store.octokitWrapper),
+      store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO, { state: 'closed' }),
+    ])
     rows.value = (issues as any[])
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
-    rows.value = await fillDocSourceCommitTimes(
-      store.octokitWrapper,
-      rows.value
-    )
-    // 补 翻译/校对 CSV 各自的最后 commit 时间
-    const w = store.octokitWrapper
-    await Promise.all(
-      rows.value.map(async (d) => {
-        d.trCsvTime = await fileCommitTime(w, d.translatedPath)
-        d.prCsvTime = await fileCommitTime(w, d.proofreadPath)
-      })
-    )
+    lastRefreshAt = Date.now()
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}`
   }
@@ -167,7 +151,7 @@ onMounted(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
 onActivated(() => {
-  if (store.octokitWrapper?.userMeta) refresh()
+  if (store.octokitWrapper?.userMeta && Date.now() - lastRefreshAt > 30_000) refresh()
 })
 </script>
 

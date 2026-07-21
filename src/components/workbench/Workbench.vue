@@ -396,15 +396,17 @@ function showPrStatus(d: DocTask) {
   return !isMine(d) || d.pr.state === '待认领' || d.tr.state !== '完成'
 }
 
-async function refresh(includeTimes = true) {
+async function refresh(includeTimes = false) {
   if (!store.octokitWrapper) return
   if (loading.value) return
   const seq = ++refreshSeq
   loading.value = true
   error.value = ''
   try {
-    if (includeTimes) await loadUsers(store.octokitWrapper)
-    const issues = await store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO)
+    const [, issues] = await Promise.all([
+      loadUsers(store.octokitWrapper),
+      store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO),
+    ])
     const oldTimes = new Map(docs.value.map((d) => [d.number, d]))
     docs.value = (issues as any[])
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
@@ -608,7 +610,7 @@ watch(
   }
 )
 onMounted(() => {
-  if (store.octokitWrapper?.userMeta) refresh()
+  if (store.octokitWrapper?.userMeta) refresh(true)
 })
 onActivated(activatedRefresh)
 </script>

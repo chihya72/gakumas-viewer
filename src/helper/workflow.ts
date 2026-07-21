@@ -359,15 +359,17 @@ const DICT_URL = preDirMatch
   ? `https://raw.githubusercontent.com/${preDirMatch[1]}/${preDirMatch[2]}/${preDirMatch[3]}/name_dictionary.json`
   : ''
 
-export function workRawUrl(relPath: string): string {
-  return `https://raw.githubusercontent.com/${WORK_OWNER}/${WORK_REPO}/${WORK_BRANCH}/${relPath}?t=${Date.now()}`
+export function workRawUrl(relPath: string, version = ''): string {
+  const query = version ? `?v=${encodeURIComponent(version)}` : ''
+  return `https://raw.githubusercontent.com/${WORK_OWNER}/${WORK_REPO}/${WORK_BRANCH}/${relPath}${query}`
 }
 
 // 原始 txt 权威源：DreamGallery/Campus-adv-txts（游戏解包 adv 文本镜像）
 export const CAMPUS_REPO =
   import.meta.env.VITE_CAMPUS_REPO || 'DreamGallery/Campus-adv-txts'
-export function campusRawUrl(flatTxtName: string): string {
-  return `https://raw.githubusercontent.com/${CAMPUS_REPO}/main/Resource/${flatTxtName}?t=${Date.now()}`
+export function campusRawUrl(flatTxtName: string, version = ''): string {
+  const query = version ? `?v=${encodeURIComponent(version)}` : ''
+  return `https://raw.githubusercontent.com/${CAMPUS_REPO}/main/Resource/${flatTxtName}${query}`
 }
 
 // 取原始 txt：campus 权威源优先，工作仓库 raw/ 兜底

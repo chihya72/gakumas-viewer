@@ -5,6 +5,7 @@ export type UserRole = 'user' | 'admin'
 export interface WorkUser {
   name: string
   role: UserRole
+  qq?: string
 }
 
 export const users = reactive<Record<string, WorkUser>>({
@@ -24,14 +25,14 @@ function b64EncodeUtf8(str: string): string {
   return btoa(bin)
 }
 
-export async function loadUsers(wrapper: any) {
+export async function loadUsers(wrapper: any, bustCache = false) {
   try {
     const data = await wrapper.getContent(
       WORK_OWNER,
       WORK_REPO,
       WORK_BRANCH,
       'users.json',
-      true
+      bustCache
     )
     Object.assign(users, JSON.parse(b64DecodeUtf8(data.content)))
   } catch (e: any) {
@@ -59,6 +60,7 @@ export async function saveMyName(wrapper: any, github: string, name: string) {
     [github]: {
       name: name.trim() || github,
       role: users[github]?.role || 'user',
+      qq: users[github]?.qq || '',
     },
   })
 }
