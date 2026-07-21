@@ -25,6 +25,14 @@ export interface Track {
   user: string
   state: TrackState
 }
+
+let workUsers: Record<string, { github?: string; qq?: string }> = {}
+
+export function setAssigneeUsers(
+  value: Record<string, { github?: string; qq?: string }>
+) {
+  workUsers = value
+}
 export interface DocTask {
   number: number
   title: string
@@ -316,7 +324,19 @@ export function completionPath(
 export function assigneesOf(tr: Track, pr: Track): string[] {
   return [
     ...new Set(
-      [tr.user, pr.user].filter((user) => user && !user.startsWith('qq-'))
+      [tr.user, pr.user]
+        .map((operator) => {
+          const value = operator.trim()
+          const qq = value.startsWith('qq-') ? value.slice(3) : ''
+          const found = Object.entries(workUsers).find(
+            ([id, user]) =>
+              id === value ||
+              (!!qq && user.qq === qq) ||
+              user.github?.toLocaleLowerCase() === value.toLocaleLowerCase()
+          )
+          return found?.[1].github || (!Object.keys(workUsers).length ? value : '')
+        })
+        .filter(Boolean)
     ),
   ]
 }

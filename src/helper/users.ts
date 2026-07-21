@@ -1,5 +1,10 @@
 import { reactive } from 'vue'
-import { WORK_BRANCH, WORK_OWNER, WORK_REPO } from './workflow'
+import {
+  setAssigneeUsers,
+  WORK_BRANCH,
+  WORK_OWNER,
+  WORK_REPO,
+} from './workflow'
 
 export type UserRole = 'user' | 'admin'
 export interface WorkUser {
@@ -11,6 +16,7 @@ export interface WorkUser {
 export const users = reactive<Record<string, WorkUser>>({
   pm: { github: 'chihya72', role: 'admin' },
 })
+setAssigneeUsers(users)
 
 function b64DecodeUtf8(b64: string): string {
   const bin = atob(b64.replace(/\n/g, ''))
