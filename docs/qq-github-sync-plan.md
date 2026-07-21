@@ -61,6 +61,8 @@ SSH 用户：pm
 - [x] 阶段 3：已加入 Git Data API 多文件提交器（文件 + `records/<file_id>.json`）和 CAS 分支冲突检测；NAS 已配置 Token 并开启写回。
 - [x] 阶段 3：QQ 上传在写回开关关闭时保持原有本地流程；开启后会尝试同步到 GitHub，并明确报告写回失败。
 - [x] 阶段 3 远程备份：`nonebot_plugin_gakuen_csv_sync/deploy_backups/phase3-20260722-013102`。
+- [x] 阶段 3：已从 GitHub Issue 状态生成并提交 100 个 `records/<file_id>.json`；NoneBot 已按 JSON 语义对账并投影到本地记录。
+- [x] 阶段 3：网页翻译/校对完成和 AI 完成路径会同步更新对应 `records/<file_id>.json`。
 - [x] 网页刷新优化：普通读取恢复缓存、首次用户/Issue 请求并行、历史提交时间改为不阻塞首屏、页面激活增加 30 秒防重复刷新；已推送并通过 GitHub Pages 部署。
 
 ## 4. 推荐整体架构
