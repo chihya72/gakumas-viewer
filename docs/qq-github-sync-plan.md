@@ -76,6 +76,9 @@ SSH 用户：pm
 - [x] 工作项对账：补齐当前 `index.json` 中遗漏的 10 个 `pstory` Issue 和记录；GitHub 当前为 110 个 Issue、110 份 JSON 记录，Bot 镜像数量一致。
 - [x] `pevent` 首次同步：Bot 已写入 1101 个文件；上游六类清单为 `cidol 318 / csprt 493 / dear 455 / event 136 / pstory 608 / pevent 1101`。
 - [x] CSV 同步提速：单类文件同步改为 8 路有限并发，`pevent` 首次全量同步实测约 107 秒完成。
+- [x] QQ 认领联动：`翻译占坑`、`校对占坑` 同时更新 GitHub Issue 与 `records/<file_id>.json`；翻译认领优先发送 `ai_csv` 机翻稿，无机翻时回退原文 CSV。
+- [x] 单端身份兼容：QQ-only 用户以 `qq-<QQ号>` 作为稳定键，JSON 保存 QQ 号并显示群 ID；GitHub-only 用户继续保存 login。合成 QQ 身份不写入 GitHub assignees。
+- [x] 历史回填：`adv_dear_hski_037` 的校对稿已按 QQ `948279048` / “煉金術式”补写 Issue、JSON 记录、`users.json` 与校对 CSV。
 - [ ] 阶段 4 以后：实现草稿恢复、版本冲突、正式稿原子轮换和 GitHub 暂时不可用时的 outbox 重试。
 
 ## 4. 推荐整体架构

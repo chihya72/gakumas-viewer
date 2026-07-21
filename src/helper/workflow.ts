@@ -314,7 +314,11 @@ export function completionPath(
 
 // 两轨认领人并集（去空、去重）
 export function assigneesOf(tr: Track, pr: Track): string[] {
-  return [...new Set([tr.user, pr.user].filter(Boolean))]
+  return [
+    ...new Set(
+      [tr.user, pr.user].filter((user) => user && !user.startsWith('qq-'))
+    ),
+  ]
 }
 
 export function editorUrlForPath(
