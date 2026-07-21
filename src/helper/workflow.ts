@@ -437,9 +437,23 @@ export async function updateWorkRecord(
   fileId: string,
   role: TrackKey,
   operatorGithub: string,
-  artifactPath: string
+  artifactPath = '',
+  state: TrackState = '完成'
 ) {
   const recordPath = `records/${fileId}.json`
+  let operatorQq = ''
+  try {
+    const userFile = await wrapper.getContent(
+      WORK_OWNER,
+      WORK_REPO,
+      WORK_BRANCH,
+      'users.json'
+    )
+    const workUsers = JSON.parse(base64ToUtf8(userFile.content))
+    operatorQq = String(workUsers?.[operatorGithub]?.qq || '').trim()
+  } catch {
+    /* 身份映射不可用时仍保留 GitHub 操作者 */
+  }
   let record: any = {
     schema_version: 1,
     file_id: fileId,
@@ -468,24 +482,29 @@ export async function updateWorkRecord(
   const track = record[key] || {}
   record[key] = {
     ...track,
-    revision: Number(track.revision || 0) + 1,
+    revision:
+      state === '完成'
+        ? Number(track.revision || 0) + 1
+        : Number(track.revision || 0),
     draft_revision: Number(track.draft_revision || 0),
-    state: '完成',
-    operator_qq: '',
+    state,
+    operator_qq: operatorQq,
     operator_github: operatorGithub,
     display_id: operatorGithub,
     display_source: 'github',
     timestamp: now,
   }
-  record.artifacts = record.artifacts || {}
-  record.artifacts[artifactKey] = {
-    ...(record.artifacts[artifactKey] || {}),
-    path: artifactPath,
-    operator_qq: '',
-    operator_github: operatorGithub,
-    display_id: operatorGithub,
-    display_source: 'github',
-    timestamp: now,
+  if (artifactPath) {
+    record.artifacts = record.artifacts || {}
+    record.artifacts[artifactKey] = {
+      ...(record.artifacts[artifactKey] || {}),
+      path: artifactPath,
+      operator_qq: operatorQq,
+      operator_github: operatorGithub,
+      display_id: operatorGithub,
+      display_source: 'github',
+      timestamp: now,
+    }
   }
   record.github = { ...(record.github || {}), updated_at: now }
   await wrapper.updateContent(
@@ -493,7 +512,7 @@ export async function updateWorkRecord(
     WORK_REPO,
     WORK_BRANCH,
     recordPath,
-    `${TRACK_LABEL[role]}记录 ${fileId}`,
+    `${TRACK_LABEL[role]}${state}记录 ${fileId}`,
     utf8ToBase64(JSON.stringify(record, null, 2) + '\n')
   )
 }

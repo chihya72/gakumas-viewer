@@ -268,6 +268,7 @@ import {
   applyTrack,
   editorUrlForPath,
   pushContentToWorkPath,
+  updateWorkRecord,
   validateRowsHtmlTags,
   workRawUrl,
   type DocTask,
@@ -549,6 +550,13 @@ async function uploadCsv(d: DocTask, role: TrackKey, file: File) {
       utf8ToBase64(text),
       `${label}上传完成 ${d.title}`
     )
+    await updateWorkRecord(
+      store.octokitWrapper,
+      d.title,
+      role,
+      me.value,
+      targetPath
+    )
     await applyTrack(store.octokitWrapper, d.number, role, {
       user: me.value,
       state: '完成',
@@ -591,6 +599,14 @@ async function claim(d: DocTask, k: TrackKey) {
   busy.value = d.number
   busyText.value = '认领中'
   try {
+    await updateWorkRecord(
+      store.octokitWrapper,
+      d.title,
+      k,
+      me.value,
+      '',
+      '进行中'
+    )
     await applyTrack(store.octokitWrapper, d.number, k, {
       user: me.value,
       state: '进行中',

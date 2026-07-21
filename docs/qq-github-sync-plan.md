@@ -50,9 +50,9 @@ SSH 用户：pm
 ### 当前实施进度（2026-07-22）
 
 - [x] 阶段 0：完成本地源码核对，并备份 CSV 插件的 `__init__.py`、`config.py`、`registered_users.csv`。
-- [/] 阶段 1：已增加 `work_protocol.py`、`resources/records/` 原子 JSON 记录层，并将现有 1450 条 `compare_status.csv` 记录完成首次迁移。
+- [x] 阶段 1：已增加 `work_protocol.py`、`resources/records/` 原子 JSON 记录层，并完成现有 `compare_status.csv` 记录迁移。
 - [x] 阶段 1：已生成 `resources/records.csv` 兼容汇总，并在网页管理页增加 `users.json` 的 QQ 字段。
-- [ ] 后续阶段：网页提交和 Bot 上传写入仍需切换到 records 权威层。
+- [x] 身份对齐：已按完全匹配结果关联 5 个 GitHub login 与 QQ 号；记录保存 QQ 号，QQ 端显示群内 ID，网页端显示 GitHub ID。其余账号等待明确 QQ 映射，不按昵称猜测。
 - [x] 阶段 2：已加入 `github_exchange.py` 只读镜像、HEAD/ETag 游标和“同步工作仓库”命令；公网仓库无需 Token 即可读取。
 - [x] 阶段 2：已部署到 NAS，依据 NAS 自有数据生成 1450 条记录；`nonebot` 容器重启后成功加载插件。
 - [x] 阶段 2：已从 GitHub 工作仓库同步 `index.json`、`users.json`、100 条 Issue 状态和 34 个已完成 CSV 到 `resources/github-work/`。
@@ -62,8 +62,12 @@ SSH 用户：pm
 - [x] 阶段 3：QQ 上传在写回开关关闭时保持原有本地流程；开启后会尝试同步到 GitHub，并明确报告写回失败。
 - [x] 阶段 3 远程备份：`nonebot_plugin_gakuen_csv_sync/deploy_backups/phase3-20260722-013102`。
 - [x] 阶段 3：已从 GitHub Issue 状态生成并提交 100 个 `records/<file_id>.json`；NoneBot 已按 JSON 语义对账并投影到本地记录。
-- [x] 阶段 3：网页翻译/校对完成和 AI 完成路径会同步更新对应 `records/<file_id>.json`。
+- [x] 阶段 3：QQ 正式上传会在同一 Git 提交写入成品与记录 JSON，并更新 Issue 工序、操作者和 assignee。
+- [x] 阶段 3：GitHub 已完成文件已投影为 Bot 可直接读取的路径；覆盖前只保留最新一份镜像备份。
+- [x] 阶段 3：网页认领、直接上传、编辑器完成和 AI 完成路径会同步更新对应 `records/<file_id>.json`；有映射时保存 QQ 号，显示仍使用 GitHub ID。
+- [x] 阶段 3：NAS 已再次重启验证，两个插件正常加载；HEAD `8155a8e4b3dfe3686441bada91a20b38e79861e7` 重复同步返回 `changed=false`。
 - [x] 网页刷新优化：普通读取恢复缓存、首次用户/Issue 请求并行、历史提交时间改为不阻塞首屏、页面激活增加 30 秒防重复刷新；已推送并通过 GitHub Pages 部署。
+- [ ] 阶段 4 以后：实现草稿恢复、版本冲突、正式稿原子轮换和 GitHub 暂时不可用时的 outbox 重试。
 
 ## 4. 推荐整体架构
 
