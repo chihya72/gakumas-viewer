@@ -58,6 +58,8 @@ const storyOptions = [
   { label: 'S卡剧情', value: 'csprt' },
   { label: '好感度剧情', value: 'dear' },
   { label: '活动剧情', value: 'event' },
+  { label: '培养故事', value: 'pstory' },
+  { label: '培养事件', value: 'pevent' },
   { label: '其它剧情', value: 'other' },
 ]
 const statusOptions = [

@@ -1,6 +1,13 @@
 import type { DocTask } from './workflow'
 
-export type StoryKind = 'cidol' | 'csprt' | 'dear' | 'event' | 'other'
+export type StoryKind =
+  | 'cidol'
+  | 'csprt'
+  | 'dear'
+  | 'event'
+  | 'pstory'
+  | 'pevent'
+  | 'other'
 export type DocStatus =
   | '待翻译'
   | '翻译中'
@@ -11,7 +18,7 @@ export type DocStatus =
 
 export function storyKind(title: string): StoryKind {
   return (title
-    .match(/(?:^|[_-])(cidol|csprt|dear|event)(?:[_-]|$)/i)?.[1]
+    .match(/(?:^|[_-])(cidol|csprt|dear|event|pstory|pevent)(?:[_-]|$)/i)?.[1]
     .toLowerCase() || 'other') as StoryKind
 }
 

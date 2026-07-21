@@ -72,6 +72,10 @@ SSH 用户：pm
 - [x] 历史冲突：经确认后，`adv_csprt-3-0104_01`～`03` 已由“框框 / GAKUKAKANG”覆盖翻译轨并补写 GitHub；文件、records、Issue 和 Bot 兼容记录已完成对账。
 - [x] 镜像一致性：records 与成品按不可变 Git 提交 SHA 下载，避免 `raw.githubusercontent.com/main` 分支缓存返回旧内容。
 - [x] 网页刷新优化：普通读取恢复缓存、首次用户/Issue 请求并行、历史提交时间改为不阻塞首屏、页面激活增加 30 秒防重复刷新；已推送并通过 GitHub Pages 部署。
+- [x] 六类统一：网页和 Bot 均支持 `cidol`、`csprt`、`dear`、`event`、`pstory`、`pevent`；QQ 命令使用“培养事件”，并兼容误拼 `pevnet`。
+- [x] 工作项对账：补齐当前 `index.json` 中遗漏的 10 个 `pstory` Issue 和记录；GitHub 当前为 110 个 Issue、110 份 JSON 记录，Bot 镜像数量一致。
+- [x] `pevent` 首次同步：Bot 已写入 1101 个文件；上游六类清单为 `cidol 318 / csprt 493 / dear 455 / event 136 / pstory 608 / pevent 1101`。
+- [x] CSV 同步提速：单类文件同步改为 8 路有限并发，`pevent` 首次全量同步实测约 107 秒完成。
 - [ ] 阶段 4 以后：实现草稿恢复、版本冲突、正式稿原子轮换和 GitHub 暂时不可用时的 outbox 重试。
 
 ## 4. 推荐整体架构
