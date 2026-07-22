@@ -8,7 +8,7 @@
 // 文件路径用阶段目录标记；旧 issue 的 <!-- path: data/... --> 仍可兼容。
 
 import { parseGithubBlobUrl } from './path'
-import { setCsvTranslator } from './csv'
+import { extractInfoFromCsvText, setCsvTranslator } from './csv'
 import { storyKind } from './document-filter'
 
 export const WORK_OWNER = import.meta.env.VITE_WORK_OWNER || 'chihya72'
@@ -632,18 +632,11 @@ function base64ToUtf8(value: string): string {
   return new TextDecoder().decode(Uint8Array.from(bin, (char) => char.charCodeAt(0)))
 }
 
-export async function updateWorkRecord(
+// GitHub login → 个人 ID / QQ 号。读的是仓库里的 users.json，不依赖前端已加载的映射
+export async function resolveOperator(
   wrapper: any,
-  fileId: string,
-  role: TrackKey,
-  operatorGithub: string,
-  artifactPath = '',
-  state: TrackState = '完成',
-  directMachine = false
-): Promise<boolean> {
-  const recordPath = `records/${fileId}.json`
-  let operatorQq = ''
-  let operatorId = operatorGithub
+  operatorGithub: string
+): Promise<{ operatorQq: string; operatorId: string }> {
   try {
     const userFile = await wrapper.getContent(
       WORK_OWNER,
@@ -651,45 +644,79 @@ export async function updateWorkRecord(
       WORK_BRANCH,
       'users.json'
     )
-    const workUsers = JSON.parse(base64ToUtf8(userFile.content))
-    const matched = Object.entries(workUsers || {}).find(
+    const all = JSON.parse(base64ToUtf8(userFile.content))
+    const matched = Object.entries(all || {}).find(
       ([key, user]: [string, any]) =>
         String(user?.github === undefined ? key : user.github)
           .trim()
           .toLocaleLowerCase() === operatorGithub.toLocaleLowerCase()
     )
-    operatorId = matched?.[0] || operatorGithub
-    operatorQq = String((matched?.[1] as any)?.qq || '').trim()
+    return {
+      operatorId: matched?.[0] || operatorGithub,
+      operatorQq: String((matched?.[1] as any)?.qq || '').trim(),
+    }
   } catch {
-    /* 身份映射不可用时仍保留 GitHub 操作者 */
+    // 身份映射不可用时仍保留 GitHub 操作者
+    return { operatorId: operatorGithub, operatorQq: '' }
   }
-  let record: any = {
-    schema_version: 1,
-    file_id: fileId,
-    batch: '',
-    // 路径第二段永远是 adv，剧情类型要从 file_id 解析
-    category: storyKind(fileId),
-    force_complete: { translation: false, proofread: false },
-    translation: { revision: 0, draft_revision: 0 },
-    proofread: { revision: 0, draft_revision: 0 },
-    artifacts: {},
-  }
+}
+
+export const EMPTY_RECORD = (fileId: string) => ({
+  schema_version: 1,
+  file_id: fileId,
+  batch: '',
+  category: storyKind(fileId),
+  force_complete: { translation: false, proofread: false },
+  translation: { revision: 0, draft_revision: 0 },
+  proofread: { revision: 0, draft_revision: 0 },
+  artifacts: {} as Record<string, any>,
+})
+
+export async function fetchRecordForWrite(
+  wrapper: any,
+  fileId: string
+): Promise<any> {
   try {
     const current = await wrapper.getContent(
       WORK_OWNER,
       WORK_REPO,
       WORK_BRANCH,
-      recordPath,
+      `records/${fileId}.json`,
       true
     )
-    record = JSON.parse(base64ToUtf8(current.content))
+    return JSON.parse(base64ToUtf8(current.content))
   } catch (error: any) {
     if (error?.response?.status !== 404) throw error
+    return EMPTY_RECORD(fileId)
   }
-  const directProofread = role === 'pr' && record.direct_machine_proofread === true
-  const now = new Date().toISOString()
+}
+
+// 就地更新记录的一条轨道与对应产物；返回是否触发「直接校对」（翻译轨归给校对者）。
+// 事务提交与旧的单文件写入共用它，避免两处各写一套语义。
+export function applyRecordTrack(
+  record: any,
+  opts: {
+    role: TrackKey
+    state: TrackState
+    artifactPath: string
+    directMachine: boolean
+    operatorQq: string
+    operatorGithub: string
+    operatorId: string
+  }
+): boolean {
+  const { role, state, artifactPath, directMachine } = opts
+  const directProofread =
+    role === 'pr' && record.direct_machine_proofread === true
+  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
   const key = role === 'tr' ? 'translation' : 'proofread'
   const artifactKey = role === 'tr' ? 'translation_csv' : 'proofread_csv'
+  const who = {
+    operator_qq: opts.operatorQq,
+    operator_github: opts.operatorGithub,
+    display_id: opts.operatorId,
+    display_source: 'github',
+  }
   const track = record[key] || {}
   record[key] = {
     ...track,
@@ -699,10 +726,7 @@ export async function updateWorkRecord(
         : Number(track.revision || 0),
     draft_revision: Number(track.draft_revision || 0),
     state,
-    operator_qq: operatorQq,
-    operator_github: operatorGithub,
-    display_id: operatorId,
-    display_source: 'github',
+    ...who,
     timestamp: now,
   }
   if (artifactPath) {
@@ -710,10 +734,7 @@ export async function updateWorkRecord(
     record.artifacts[artifactKey] = {
       ...(record.artifacts[artifactKey] || {}),
       path: artifactPath,
-      operator_qq: operatorQq,
-      operator_github: operatorGithub,
-      display_id: operatorId,
-      display_source: 'github',
+      ...who,
       timestamp: now,
     }
   }
@@ -737,6 +758,33 @@ export async function updateWorkRecord(
     delete record.direct_machine_proofread
   }
   record.github = { ...(record.github || {}), updated_at: now }
+  return directProofread
+}
+
+export async function updateWorkRecord(
+  wrapper: any,
+  fileId: string,
+  role: TrackKey,
+  operatorGithub: string,
+  artifactPath = '',
+  state: TrackState = '完成',
+  directMachine = false
+): Promise<boolean> {
+  const recordPath = `records/${fileId}.json`
+  const { operatorQq, operatorId } = await resolveOperator(
+    wrapper,
+    operatorGithub
+  )
+  const record = await fetchRecordForWrite(wrapper, fileId)
+  const directProofread = applyRecordTrack(record, {
+    role,
+    state,
+    artifactPath,
+    directMachine,
+    operatorQq,
+    operatorGithub,
+    operatorId,
+  })
   await wrapper.updateContent(
     WORK_OWNER,
     WORK_REPO,
@@ -808,6 +856,110 @@ export async function syncRecordTracks(
     utf8ToBase64(JSON.stringify(record, null, 2) + '\n')
   )
   return true
+}
+
+export class StaleRevisionError extends Error {}
+
+// 阶段完成事务：正式稿、备份、记录、校对 TXT 一次提交完成。
+// baseRevision 是打开编辑器时看到的版本；提交前比对，旧稿不能覆盖新稿。
+// 传 -1 表示放弃校验（无法确定基准版本的入口，如批量上传）。
+export async function completeStage(
+  wrapper: any,
+  opts: {
+    fileId: string
+    role: TrackKey
+    sourcePath: string
+    contentB64: string
+    operatorGithub: string
+    translatorDisplay: string
+    baseRevision: number
+  }
+): Promise<{ directProofread: boolean; commitSha: string }> {
+  const { fileId, role, sourcePath, operatorGithub, baseRevision } = opts
+  const key = role === 'tr' ? 'translation' : 'proofread'
+  const record = await fetchRecordForWrite(wrapper, fileId)
+  const current = Number(record[key]?.revision || 0)
+  if (baseRevision >= 0 && current !== baseRevision)
+    throw new StaleRevisionError(
+      `该文件的${TRACK_LABEL[role]}已被他人更新（你打开时是第 ${baseRevision} 版，` +
+        `现在是第 ${current} 版）。请重新打开加载最新内容，避免覆盖对方的成果。`
+    )
+
+  const outputPath = completionPath(sourcePath, fileId, role)
+  const stamped = stampTranslator(opts.contentB64, opts.translatorDisplay)
+  const files: { path: string; content: string }[] = []
+
+  // 旧正式稿轮换为唯一显式备份；内容没变就不必留
+  const backupDir = role === 'tr' ? 'translated_backup' : 'proofread_backup'
+  try {
+    const old = await wrapper.getContent(
+      WORK_OWNER,
+      WORK_REPO,
+      WORK_BRANCH,
+      outputPath,
+      true
+    )
+    const oldB64 = (old.content as string).replace(/\n/g, '')
+    if (oldB64 !== stamped)
+      files.push({
+        path: stagePathFromAny(sourcePath, fileId, backupDir),
+        content: oldB64,
+      })
+  } catch (error: any) {
+    if (error?.response?.status !== 404) throw error
+  }
+  files.push({ path: outputPath, content: stamped })
+
+  const { operatorQq, operatorId } = await resolveOperator(
+    wrapper,
+    operatorGithub
+  )
+  const directProofread = applyRecordTrack(record, {
+    role,
+    state: '完成',
+    artifactPath: outputPath,
+    directMachine: false,
+    operatorQq,
+    operatorGithub,
+    operatorId,
+  })
+  // 直接校对：翻译轨归给校对者，成品同步一份到翻译路径
+  if (directProofread)
+    files.push({
+      path: completionPath(sourcePath, fileId, 'tr'),
+      content: stampTranslator(opts.contentB64, operatorId),
+    })
+
+  // 校对完成时生成纯中文 TXT；原文缺失就跳过，不阻断提交
+  if (role === 'pr') {
+    try {
+      const [rawTxt, dict] = await Promise.all([
+        fetchRawTxt(fileId),
+        fetchNameDict(),
+      ])
+      if (rawTxt !== null) {
+        const { data } = extractInfoFromCsvText(base64ToUtf8(stamped))
+        files.push({
+          path: `proofread_txt/${fileId}.txt`,
+          content: utf8ToBase64(buildChineseTxt(rawTxt, data, dict)),
+        })
+      }
+    } catch {
+      // 生成失败不影响正式稿落地，后续可单独补
+    }
+  }
+
+  files.push({
+    path: `records/${fileId}.json`,
+    content: utf8ToBase64(JSON.stringify(record, null, 2) + '\n'),
+  })
+
+  const commitSha = await commitWorkFiles(
+    wrapper,
+    files,
+    `${TRACK_LABEL[role]}完成 ${fileId}`
+  )
+  return { directProofread, commitSha }
 }
 
 export function validateRowsHtmlTags(
@@ -1037,6 +1189,12 @@ export async function createWorkIssue(
     await wrapper.updateIssue(WORK_OWNER, WORK_REPO, issue.number, {
       state: 'closed',
     })
+  }
+  // 入库时间只在新增文件时才需要补：它是原文首次提交时间，翻译校对不会改变它
+  try {
+    await saveSourceTimes(wrapper, [docFromIssue(issue)])
+  } catch {
+    // 清单写入失败不影响建单；读取端缺项会自动回退逐个查
   }
   return issue
 }

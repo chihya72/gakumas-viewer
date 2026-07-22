@@ -253,11 +253,7 @@ import PushHeader from '../translate/push/PushHeader.vue'
 import DocFilters from './DocFilters.vue'
 import FileSaver from 'file-saver'
 import { displayUser, loadUsers } from '../../helper/users'
-import {
-  extractInfoFromCsvText,
-  setCsvTranslator,
-  type CsvDataLine,
-} from '../../helper/csv'
+import { extractInfoFromCsvText, type CsvDataLine } from '../../helper/csv'
 import {
   WORK_OWNER,
   WORK_REPO,
@@ -271,7 +267,7 @@ import {
   sortBySourceCommitTime,
   applyTrack,
   editorUrlForPath,
-  pushContentToWorkPath,
+  completeStage,
   updateWorkRecord,
   validateRowsHtmlTags,
   workRawUrl,
@@ -541,21 +537,18 @@ async function uploadCsv(d: DocTask, role: TrackKey, file: File) {
       throw new Error(
         `HTML标签无效，禁止上传：\n${tagErrors.slice(0, 5).join('\n')}`
       )
-    // 署名行始终记翻译轨的人：上传译稿记自己，上传校对稿沿用现有译者
-    const translator = displayUser(role === 'tr' ? me.value : d.tr.user)
-    await pushContentToWorkPath(
-      store.octokitWrapper,
-      targetPath,
-      utf8ToBase64(setCsvTranslator(text, translator)),
-      `${label}上传完成 ${d.title}`
-    )
-    await updateWorkRecord(
-      store.octokitWrapper,
-      d.title,
+    // 与编辑器走同一个事务：正式稿、备份、记录、校对 TXT 一次提交。
+    // 这里没有「打开时的版本」，传 -1 跳过 CAS——上传前已校验过日语原文一致。
+    await completeStage(store.octokitWrapper, {
+      fileId: d.title,
       role,
-      me.value,
-      targetPath
-    )
+      sourcePath: targetPath,
+      contentB64: utf8ToBase64(text),
+      operatorGithub: me.value,
+      // 署名行始终记翻译轨的人：上传译稿记自己，上传校对稿沿用现有译者
+      translatorDisplay: displayUser(role === 'tr' ? me.value : d.tr.user),
+      baseRevision: -1,
+    })
     await applyTrack(store.octokitWrapper, d.number, role, {
       user: me.value,
       state: '完成',

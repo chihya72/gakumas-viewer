@@ -44,10 +44,9 @@ import {
   myStatusOf,
   applyTrack,
   pushContentToSource,
-  pushContentToWorkPath,
-  updateWorkRecord,
-  completionPath,
-  stampTranslator,
+  StaleRevisionError,
+  completeStage,
+  fetchWorkRecord,
   validateRowsHtmlTags,
   type MyStatus,
 } from '../../helper/workflow'
@@ -168,8 +167,11 @@ const workStatus = ref<MyStatus>({
 const workStatusLoaded = ref(false)
 // 当前翻译轨的认领人：校对完成时署名行要沿用他，而不是改成校对者
 const trUser = ref('')
+// 打开时的版本号，提交时用来判断有没有被别人抢先完成；-1 表示未知
+const baseRevision = ref(-1)
 async function loadWorkStatus() {
   trUser.value = ''
+  baseRevision.value = -1
   workStatus.value = { activeRole: null, blocked: false, blockMsg: '' }
   workStatusLoaded.value = false
   if (!issueNumber.value || !store.octokitWrapper?.userMeta) {
@@ -190,6 +192,12 @@ async function loadWorkStatus() {
       me.value,
       role === 'tr' || role === 'pr' ? role : undefined
     )
+    const active = workStatus.value.activeRole
+    if (active) {
+      const record = await fetchWorkRecord(issue.title, issue.updated_at)
+      const key = active === 'tr' ? 'translation' : 'proofread'
+      baseRevision.value = Number((record as any)?.[key]?.revision || 0)
+    }
   } catch {
     /* 未登录/无 issue 时静默 */
   } finally {
@@ -267,33 +275,27 @@ async function onCompleteClick() {
       /\.csv$/,
       ''
     )
-    const outputPath = completionPath(path, title, role)
-    // 署名行记翻译轨的人：完成翻译记自己，完成校对沿用现有译者（无则记自己）
-    const stamped = stampTranslator(
-      content,
-      displayUser(role === 'tr' ? me.value : trUser.value || me.value)
-    )
-    await pushContentToWorkPath(
-      store.octokitWrapper,
-      outputPath,
-      stamped,
-      `${TRACK_LABEL[role]}完成 ${store.jsonUrl}`
-    )
-    const directProofread = await updateWorkRecord(
-      store.octokitWrapper,
-      title,
-      role,
-      me.value,
-      outputPath
-    )
-    if (directProofread) {
-      // 直接校对：翻译轨也记为校对者，署名行同样记他
-      await pushContentToWorkPath(
-        store.octokitWrapper,
-        completionPath(path, title, 'tr'),
-        stampTranslator(content, displayUser(me.value)),
-        `直接校对结果同步为翻译 ${title}`
+    // 正式稿、备份、记录、校对 TXT 一次提交；旧稿覆盖新稿会被拒
+    try {
+      await completeStage(store.octokitWrapper, {
+        fileId: title,
+        role,
+        sourcePath: path,
+        contentB64: content,
+        operatorGithub: me.value,
+        // 署名行记翻译轨的人：完成翻译记自己，完成校对沿用现有译者（无则记自己）
+        translatorDisplay: displayUser(
+          role === 'tr' ? me.value : trUser.value || me.value
+        ),
+        baseRevision: baseRevision.value,
+      })
+    } catch (e: any) {
+      alert(
+        e instanceof StaleRevisionError
+          ? e.message
+          : `${TRACK_LABEL[role]}提交失败：${e?.message || e}`
       )
+      return
     }
     await applyTrack(store.octokitWrapper, issueNumber.value, role, {
       user: me.value,

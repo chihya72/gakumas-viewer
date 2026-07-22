@@ -11,7 +11,8 @@
     "build:doc": "honkit build",
     "build": "make prebuild && vue-tsc && vite build && honkit build",
     "preview": "vite preview",
-    "lint:js": "eslint src --ext .ts,.vue"
+    "lint:js": "eslint src --ext .ts,.vue",
+    "check:stage": "esbuild scripts/check-complete-stage.ts --bundle --format=esm --platform=node --outfile=node_modules/.cache/check-stage.mjs --define:import.meta.env={} && node node_modules/.cache/check-stage.mjs"
   },
   "dependencies": {
     "@octokit/types": "^9.0.0",
