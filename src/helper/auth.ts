@@ -455,10 +455,12 @@ class OctokitWrapper {
     }
   }
 
+  // 带 _cb 破代理缓存：body 里的轨道状态决定编辑器能不能编辑、译者是谁，
+  // 刚认领或刚完成后立刻打开时读到旧值会直接判错。
   async getIssue(owner: string, repo: string, issue_number: number) {
     const { data } = await this.request(
       'GET /repos/{owner}/{repo}/issues/{issue_number}',
-      { owner, repo, issue_number, headers: this.headers }
+      { owner, repo, issue_number, _cb: Date.now(), headers: this.headers }
     )
     return data
   }
