@@ -430,6 +430,7 @@ class OctokitWrapper {
     return data
   }
 
+  // 列表也破缓存：认领/完成后点刷新必须立刻看到新状态
   async listIssues(
     owner: string,
     repo: string,
@@ -440,6 +441,7 @@ class OctokitWrapper {
     } = {}
   ) {
     const out = []
+    const cb = Date.now()
     for (let page = 1; ; page++) {
       const { data } = await this.request('GET /repos/{owner}/{repo}/issues', {
         owner,
@@ -447,6 +449,7 @@ class OctokitWrapper {
         state: 'open',
         per_page: 100,
         page,
+        _cb: cb,
         ...params,
         headers: this.headers,
       })

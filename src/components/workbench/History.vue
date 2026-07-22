@@ -71,7 +71,7 @@ import {
   fillDocStageCommitTimes,
   formatGmt8,
   isArchivedIssue,
-  workRawUrl,
+  readWorkFile,
   type DocTask,
   type TrackKey,
 } from '../../helper/workflow'
@@ -100,7 +100,9 @@ async function refresh() {
   try {
     const [, issues] = await Promise.all([
       loadUsers(store.octokitWrapper),
-      store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO, { state: 'closed' }),
+      store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO, {
+        state: 'closed',
+      }),
     ])
     const loaded = (issues as any[])
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
@@ -125,26 +127,30 @@ async function onPage(pageRows: DocTask[]) {
 }
 
 async function downloadCsv(d: DocTask) {
-  const r = await fetch(workRawUrl(d.proofreadPath))
-  if (!r.ok) {
-    alert(`校对CSV下载失败: ${r.status}`)
+  // API 直读而非 raw：raw 无视查询串，刚完成的文件会下到上一版
+  const text = await readWorkFile(store.octokitWrapper, d.proofreadPath)
+  if (text === null) {
+    alert('校对CSV下载失败：文件不存在或无权限')
     return
   }
-  FileSaver.saveAs(await r.blob(), `${d.title}_校对.csv`)
+  FileSaver.saveAs(
+    new Blob([text], { type: 'text/csv;charset=utf-8' }),
+    `${d.title}_校对.csv`
+  )
 }
 
 async function downloadChineseTxt(d: DocTask) {
-  const [rawTxt, csvResp, dict] = await Promise.all([
+  const [rawTxt, csvText, dict] = await Promise.all([
     fetchRawTxt(d.title),
-    fetch(workRawUrl(d.proofreadPath)),
+    readWorkFile(store.octokitWrapper, d.proofreadPath),
     fetchNameDict(),
   ])
-  if (rawTxt === null || !csvResp.ok) {
+  if (rawTxt === null || csvText === null) {
     alert('纯中文TXT生成失败：原始TXT或校对CSV不存在')
     return
   }
   try {
-    const { data } = extractInfoFromCsvText(await csvResp.text())
+    const { data } = extractInfoFromCsvText(csvText)
     const merged = buildChineseTxt(rawTxt, data, dict)
     FileSaver.saveAs(
       new Blob([merged], { type: 'text/plain;charset=utf-8' }),
@@ -165,7 +171,8 @@ onMounted(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
 onActivated(() => {
-  if (store.octokitWrapper?.userMeta && Date.now() - lastRefreshAt > 30_000) refresh()
+  if (store.octokitWrapper?.userMeta && Date.now() - lastRefreshAt > 30_000)
+    refresh()
 })
 </script>
 

@@ -51,7 +51,8 @@ function normalizeUsers(value: any): Record<string, WorkUser> {
   return result
 }
 
-export async function loadUsers(wrapper: any, bustCache = false) {
+// 默认破缓存：改完用户马上刷新列表，读到旧 users.json 会显示旧个人 ID
+export async function loadUsers(wrapper: any, bustCache = true) {
   try {
     const data = await wrapper.getContent(
       WORK_OWNER,
@@ -84,7 +85,8 @@ export async function saveUsers(wrapper: any, next: Record<string, WorkUser>) {
 export async function saveMyName(wrapper: any, github: string, name: string) {
   await loadUsers(wrapper)
   const current = Object.entries(users).find(
-    ([, user]) => user.github?.toLocaleLowerCase() === github.toLocaleLowerCase()
+    ([, user]) =>
+      user.github?.toLocaleLowerCase() === github.toLocaleLowerCase()
   )
   const id = name.trim() || github
   if (users[id] && current?.[0] !== id) throw new Error(`个人 ID 已存在：${id}`)

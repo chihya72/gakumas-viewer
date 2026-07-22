@@ -86,16 +86,13 @@ function putCachedTime(key: string, value: string) {
   }, 500)
 }
 
-// 某文件在工作仓库的最后 commit 时间（ISO）；文件不存在返回 ''
-// version 传 issue 的 updated_at：issue 没动过就直接用缓存
+// 某文件在工作仓库的最后 commit 时间（ISO）；文件不存在返回 ''。
+// 不缓存也不复用：这个值每次完成都会变，缓存住就会显示上一次的时间。
+// 只对当前页那几十行查询，代价可接受。
 export async function fileCommitTime(
   wrapper: any,
-  path: string,
-  version = ''
+  path: string
 ): Promise<string> {
-  const key = `last:${path}@${version}`
-  const hit = readTimeCache()[key]
-  if (hit) return hit
   try {
     const { data } = await wrapper.request(
       'GET /repos/{owner}/{repo}/commits',
@@ -104,12 +101,11 @@ export async function fileCommitTime(
         repo: WORK_REPO,
         path,
         per_page: 1,
+        _cb: Date.now(),
         headers: { 'X-GitHub-Api-Version': '2022-11-28' },
       }
     )
-    const time = data?.[0]?.commit?.committer?.date || ''
-    putCachedTime(key, time)
-    return time
+    return data?.[0]?.commit?.committer?.date || ''
   } catch {
     return ''
   }
@@ -216,10 +212,11 @@ export async function saveSourceTimes(
   docs: DocTask[]
 ): Promise<number> {
   const filled = await fillDocSourceCommitTimes(wrapper, docs)
+  // 合并前必须读到最新清单：走 raw 会读到过期副本，写回时丢掉别人刚加的条目
   let existing: Record<string, string> = {}
   try {
-    const res = await fetch(workRawUrl(SOURCE_TIMES_PATH, String(Date.now())))
-    if (res.ok) existing = await res.json()
+    const text = await readWorkFile(wrapper, SOURCE_TIMES_PATH)
+    if (text) existing = JSON.parse(text)
   } catch {
     // 首次生成
   }
@@ -256,13 +253,22 @@ export async function fillDocSourceCommitTimes(
     .sort(sortBySourceCommitTime)
 }
 
-export async function fetchWorkRecord(
-  title: string,
-  version = ''
-): Promise<any | null> {
+// 读工作仓库里的文本文件。一律走 API 直读并破代理缓存——
+// raw.githubusercontent 无视查询串，拿它取「要用的内容」会下到旧版本。
+// 只有入库时间清单仍走 raw：那是不变量，且一次要顶掉几百个请求。
+export async function readWorkFile(
+  wrapper: any,
+  path: string
+): Promise<string | null> {
   try {
-    const res = await fetch(workRawUrl(`records/${title}.json`, version))
-    return res.ok ? await res.json() : null
+    const file: any = await wrapper.getContent(
+      WORK_OWNER,
+      WORK_REPO,
+      WORK_BRANCH,
+      path,
+      true
+    )
+    return base64ToUtf8(file.content)
   } catch {
     return null
   }
@@ -288,15 +294,17 @@ export async function fillDocStageCommitTimes(
   const times = await Promise.all(
     docs.map(async (d) => {
       const done = d.tr.state === '完成' || d.pr.state === '完成'
-      const [record, trFile, prFile] = await Promise.all([
-        done ? fetchWorkRecord(d.title, d.updatedAt) : null,
-        d.tr.state === '完成'
-          ? fileCommitTime(wrapper, d.translatedPath, d.updatedAt)
-          : '',
-        d.pr.state === '完成'
-          ? fileCommitTime(wrapper, d.proofreadPath, d.updatedAt)
-          : '',
+      const [recordText, trFile, prFile] = await Promise.all([
+        done ? readWorkFile(wrapper, `records/${d.title}.json`) : null,
+        d.tr.state === '完成' ? fileCommitTime(wrapper, d.translatedPath) : '',
+        d.pr.state === '完成' ? fileCommitTime(wrapper, d.proofreadPath) : '',
       ])
+      let record: any = null
+      try {
+        record = recordText ? JSON.parse(recordText) : null
+      } catch {
+        record = null
+      }
       return {
         number: d.number,
         trCsvTime:
