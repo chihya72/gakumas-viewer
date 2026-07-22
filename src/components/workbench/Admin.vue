@@ -308,6 +308,7 @@ import {
   restoreIssue,
   saveSourceTimes,
   stagePathForTitle,
+  syncRecordTracks,
   updateTracks,
   type DocTask,
 } from '../../helper/workflow'
@@ -493,6 +494,7 @@ async function saveDoc(d: DocTask) {
       d.pr,
       displayUser(d.tr.user)
     )
+    await syncRecordTracks(store.octokitWrapper, d.title, d.tr, d.pr)
     await refresh()
   } catch (e: any) {
     alert(`保存状态失败：${e?.message || e}`)
@@ -538,7 +540,7 @@ async function batchSave() {
   if (!picked.length) return
   batchSaving.value = true
   try {
-    for (const d of picked)
+    for (const d of picked) {
       await updateTracks(
         store.octokitWrapper,
         d.number,
@@ -546,6 +548,8 @@ async function batchSave() {
         d.pr,
         displayUser(d.tr.user)
       )
+      await syncRecordTracks(store.octokitWrapper, d.title, d.tr, d.pr)
+    }
     await refresh()
   } catch (e: any) {
     alert(`批量保存失败：${e?.message || e}`)

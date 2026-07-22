@@ -748,6 +748,68 @@ export async function updateWorkRecord(
   return directProofread
 }
 
+// 把两轨状态投影进记录 JSON。
+// Bot 的同步游标是 git HEAD，而编辑 Issue 不产生 commit，所以只改 Issue 的操作
+// （管理页保存）对 Bot 完全不可见；写记录才是那个可见信号。
+// 不改 revision，也不在无变化时写入，避免空提交和时间戳漂移。
+export async function syncRecordTracks(
+  wrapper: any,
+  fileId: string,
+  tr: Track,
+  pr: Track
+): Promise<boolean> {
+  const recordPath = `records/${fileId}.json`
+  let record: any
+  try {
+    const current = await wrapper.getContent(
+      WORK_OWNER,
+      WORK_REPO,
+      WORK_BRANCH,
+      recordPath,
+      true
+    )
+    record = JSON.parse(base64ToUtf8(current.content))
+  } catch (error: any) {
+    if (error?.response?.status === 404) return false
+    throw error
+  }
+  const now = new Date().toISOString()
+  let changed = false
+  for (const [key, track] of [
+    ['translation', tr],
+    ['proofread', pr],
+  ] as [string, Track][]) {
+    const found = findWorkUser(track.user)
+    const next = {
+      state: track.state,
+      operator_qq: found?.[1].qq || '',
+      operator_github: found?.[1].github || '',
+      display_id: found?.[0] || track.user,
+    }
+    const old = record[key] || {}
+    if (
+      old.state === next.state &&
+      (old.display_id || '') === next.display_id &&
+      (old.operator_qq || '') === next.operator_qq &&
+      (old.operator_github || '') === next.operator_github
+    )
+      continue
+    record[key] = { ...old, ...next, timestamp: now }
+    changed = true
+  }
+  if (!changed) return false
+  record.github = { ...(record.github || {}), updated_at: now }
+  await wrapper.updateContent(
+    WORK_OWNER,
+    WORK_REPO,
+    WORK_BRANCH,
+    recordPath,
+    `同步工序状态 ${fileId}`,
+    utf8ToBase64(JSON.stringify(record, null, 2) + '\n')
+  )
+  return true
+}
+
 export function validateRowsHtmlTags(
   rows: { id: string; text: string; trans: string }[]
 ): string[] {
