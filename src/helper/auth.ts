@@ -260,7 +260,13 @@ class OctokitWrapper {
   }
 
   // 多文件一次提交：blob → tree → commit → 非强制更新 ref。
-  // 非强制更新在分支被人抢先推进时返回 422，这就是 CAS 冲突检测，不做盲重试。
+  //
+  // 读 HEAD 必须带 _cb 破坏 API 代理缓存：不加的话连续保存两次，第二次会读到
+  // 上一次提交之前的 sha，拿过期父提交更新引用直接失败（与并发无关）。
+  //
+  // 分支真被推进时也不能直接失败——Bot 每 60 秒轮询就可能写记录，那样任何人在
+  // 仓库任何角落提交一次都会让本次保存作废。只有当**我们要写的这些路径**也被
+  // 别人改过时才算真冲突；否则在新 HEAD 上重建 tree 重试。
   // content 传 base64；content 为 null 表示删除该路径。
   // path 相同的以最后一个为准（tree 里不能有重复项）。
   async commitFiles(
@@ -268,13 +274,20 @@ class OctokitWrapper {
     repo: string,
     branch: string,
     message: string,
-    files: { path: string; content: string | null }[]
+    files: { path: string; content: string | null }[],
+    retriesLeft = 3
   ): Promise<string> {
     if (!files.length) throw new Error('没有要提交的文件')
 
     const { data: ref } = await this.request(
       'GET /repos/{owner}/{repo}/git/ref/{ref}',
-      { owner, repo, ref: `heads/${branch}`, headers: this.headers }
+      {
+        owner,
+        repo,
+        ref: `heads/${branch}`,
+        _cb: Date.now(),
+        headers: this.headers,
+      }
     )
     const headSha: string = ref.object.sha
     const { data: head } = await this.request(
@@ -343,11 +356,44 @@ class OctokitWrapper {
         headers: this.headers,
       })
     } catch (e: any) {
-      if (e?.response?.status === 422)
+      if (e?.response?.status !== 422 || retriesLeft <= 0) throw e
+      // 分支动了：看动的是不是我们这几个路径
+      const { data: newRef } = await this.request(
+        'GET /repos/{owner}/{repo}/git/ref/{ref}',
+        {
+          owner,
+          repo,
+          ref: `heads/${branch}`,
+          _cb: Date.now(),
+          headers: this.headers,
+        }
+      )
+      const { data: diff } = await this.request(
+        'GET /repos/{owner}/{repo}/compare/{basehead}',
+        {
+          owner,
+          repo,
+          basehead: `${headSha}...${newRef.object.sha}`,
+          headers: this.headers,
+        }
+      )
+      const ours = new Set(unique.map((f) => f.path))
+      const clash = (diff.files || [])
+        .map((f: any) => f.filename)
+        .filter((f: string) => ours.has(f))
+      if (clash.length)
         throw new Error(
-          `分支已被其他人推进（${headSha.slice(0, 7)} 已过期），请刷新后重试`
+          '这些文件已被其他人改动，请刷新后重试：\n' +
+            clash.slice(0, 5).join('\n')
         )
-      throw e
+      return this.commitFiles(
+        owner,
+        repo,
+        branch,
+        message,
+        files,
+        retriesLeft - 1
+      )
     }
     return commit.sha
   }

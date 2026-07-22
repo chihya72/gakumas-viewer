@@ -347,6 +347,10 @@ const check = (name, cond, extra = '') => {
   check('备份是上一版', un(backups[0].content) === '上一版内容')
 }
 
+// 注：commitFiles 的「读 HEAD 加 _cb 破缓存 + 冲突时按路径判断是否重试」没有
+// 自动检查——auth.ts 从 https://esm.sh 导入 Octokit，node 侧打不了包，
+// 为一个用例引入打桩不划算。验证方式：连续两次「中途保存」应当都成功。
+
 // 13) 身份归一：轨道存个人 ID，登录态是 GitHub login
 {
   setAssigneeUsers({
