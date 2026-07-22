@@ -42,11 +42,12 @@
       下一页
     </n-button>
   </div>
-  <slot :rows="pagedRows" />
+  <!-- rows：当前页，用来渲染；allRows：筛选后全部，批量操作用它，别被翻页缩了范围 -->
+  <slot :rows="pagedRows" :all-rows="filteredRows" />
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NInput, NSelect } from 'naive-ui'
 import type { DocTask } from '../../helper/workflow'
@@ -113,6 +114,9 @@ const filteredRows = computed(() =>
   )
 )
 
+// 当前页的行抛给父组件，让"完成时间"这类按行发请求的数据只查看得见的那一页
+const emit = defineEmits<{ (e: 'page', rows: DocTask[]): void }>()
+
 const dateGroups = computed<[string, DocTask[]][]>(() =>
   props.paged ? groupDocsByDate(filteredRows.value) : [['', filteredRows.value]]
 )
@@ -123,6 +127,8 @@ const activeIndex = computed(() => {
 })
 const activeKey = computed(() => dateGroups.value[activeIndex.value]?.[0] ?? '')
 const pagedRows = computed(() => dateGroups.value[activeIndex.value]?.[1] ?? [])
+
+watch(pagedRows, (rows) => emit('page', rows), { immediate: true })
 
 function go(step: number) {
   const key = dateGroups.value[activeIndex.value + step]?.[0]

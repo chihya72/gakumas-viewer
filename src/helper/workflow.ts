@@ -49,11 +49,51 @@ export interface DocTask {
   prCsvTime?: string // proofread_csv 最后 commit 时间（页面异步填充）
 }
 
+// commit 时间查询是这几个列表页的主要开销（一个文件一次请求），但结果几乎不变：
+// 首次 commit 时间是不变量，最后 commit 时间只在 issue 更新时才可能变。
+// 缓存在 localStorage，键里带版本；空结果不缓存（文件以后可能出现）。
+const TIME_CACHE_KEY = 'gv:commit-times'
+let timeCache: Record<string, string> | null = null
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+function readTimeCache(): Record<string, string> {
+  if (!timeCache) {
+    try {
+      timeCache = JSON.parse(localStorage.getItem(TIME_CACHE_KEY) || '{}')
+    } catch {
+      timeCache = {}
+    }
+  }
+  return timeCache as Record<string, string>
+}
+
+function putCachedTime(key: string, value: string) {
+  if (!value) return
+  const cache = readTimeCache()
+  // ponytail: 满了就整个丢掉重建，不做 LRU；重建成本就是再查一遍
+  if (Object.keys(cache).length > 20000) timeCache = {}
+  ;(timeCache as Record<string, string>)[key] = value
+  if (flushTimer) return
+  flushTimer = setTimeout(() => {
+    flushTimer = null
+    try {
+      localStorage.setItem(TIME_CACHE_KEY, JSON.stringify(timeCache))
+    } catch {
+      // 配额满或隐私模式：放弃缓存，不影响功能
+    }
+  }, 500)
+}
+
 // 某文件在工作仓库的最后 commit 时间（ISO）；文件不存在返回 ''
+// version 传 issue 的 updated_at：issue 没动过就直接用缓存
 export async function fileCommitTime(
   wrapper: any,
-  path: string
+  path: string,
+  version = ''
 ): Promise<string> {
+  const key = `last:${path}@${version}`
+  const hit = readTimeCache()[key]
+  if (hit) return hit
   try {
     const { data } = await wrapper.request(
       'GET /repos/{owner}/{repo}/commits',
@@ -65,7 +105,9 @@ export async function fileCommitTime(
         headers: { 'X-GitHub-Api-Version': '2022-11-28' },
       }
     )
-    return data?.[0]?.commit?.committer?.date || ''
+    const time = data?.[0]?.commit?.committer?.date || ''
+    putCachedTime(key, time)
+    return time
   } catch {
     return ''
   }
@@ -105,6 +147,10 @@ export async function docSourceCommitTime(
   wrapper: any,
   d: Pick<DocTask, 'title' | 'rawPath' | 'aiPath'>
 ): Promise<string> {
+  // 原文首次入库时间不会变，命中缓存就完全不发请求（一条最多省 3 次）
+  const key = `src:${d.title}`
+  const hit = readTimeCache()[key]
+  if (hit) return hit
   const [owner, repo] = CAMPUS_REPO.split('/')
   const campus = owner && repo
     ? await firstFileCommitTimeInRepo(
@@ -114,7 +160,7 @@ export async function docSourceCommitTime(
         `Resource/${d.title}.txt`
       )
     : ''
-  return (
+  const time =
     campus ||
     (await firstFileCommitTimeInRepo(
       wrapper,
@@ -130,7 +176,8 @@ export async function docSourceCommitTime(
       d.aiPath,
       WORK_BRANCH
     ))
-  )
+  putCachedTime(key, time)
+  return time
 }
 
 export function sortBySourceCommitTime(a: DocTask, b: DocTask) {
@@ -166,9 +213,13 @@ export async function fillDocStageCommitTimes(
     docs.map(async (d) => ({
       number: d.number,
       trCsvTime:
-        d.tr.state === '完成' ? await fileCommitTime(wrapper, d.translatedPath) : '',
+        d.tr.state === '完成'
+          ? await fileCommitTime(wrapper, d.translatedPath, d.updatedAt)
+          : '',
       prCsvTime:
-        d.pr.state === '完成' ? await fileCommitTime(wrapper, d.proofreadPath) : '',
+        d.pr.state === '完成'
+          ? await fileCommitTime(wrapper, d.proofreadPath, d.updatedAt)
+          : '',
     }))
   )
   const byNumber = new Map(times.map((t) => [t.number, t]))

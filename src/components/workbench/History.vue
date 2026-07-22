@@ -11,7 +11,7 @@
         >
       </div>
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
-      <doc-filters v-slot="{ rows: filteredRows }" :docs="rows">
+      <doc-filters v-slot="{ rows: filteredRows }" :docs="rows" @page="onPage">
         <div v-for="d in filteredRows" :key="d.number" class="row">
           <span class="source-time">{{
             formatGmt8(d.sourceCommitTime || '')
@@ -105,19 +105,23 @@ async function refresh() {
     const loaded = (issues as any[])
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
-    const withSourceTimes = await fillDocSourceCommitTimes(
-      store.octokitWrapper,
-      loaded
-    )
-    rows.value = await fillDocStageCommitTimes(
-      store.octokitWrapper,
-      withSourceTimes
-    )
+    // 完成时间不在这里查：等 DocFilters 报出当前页再按页补，见 onPage
+    rows.value = await fillDocSourceCommitTimes(store.octokitWrapper, loaded)
     lastRefreshAt = Date.now()
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}`
   }
   loading.value = false
+}
+
+// 只给当前页没查过的行补翻译/校对完成时间；缓存命中的不重复请求
+async function onPage(pageRows: DocTask[]) {
+  if (!store.octokitWrapper) return
+  const pending = pageRows.filter((d) => d.trCsvTime === undefined)
+  if (!pending.length) return
+  const filled = await fillDocStageCommitTimes(store.octokitWrapper, pending)
+  const byNumber = new Map(filled.map((d) => [d.number, d]))
+  rows.value = rows.value.map((d) => byNumber.get(d.number) || d)
 }
 
 async function downloadCsv(d: DocTask) {

@@ -44,7 +44,7 @@
 
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
 
-      <doc-filters v-slot="{ rows: filteredRows }" :docs="rows">
+      <doc-filters v-slot="{ rows: filteredRows, allRows }" :docs="rows">
         <div v-if="filteredRows.length" class="table-scroll">
           <table class="grid">
             <colgroup>
@@ -58,8 +58,8 @@
               <tr>
                 <th class="sel-col">
                   <n-checkbox
-                    :checked="areAllSelected(filteredRows)"
-                    @update:checked="(v: boolean) => toggleAll(v, filteredRows)"
+                    :checked="areAllSelected(allRows)"
+                    @update:checked="(v: boolean) => toggleAll(v, allRows)"
                   />
                 </th>
                 <th>入库</th>
