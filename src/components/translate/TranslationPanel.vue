@@ -47,9 +47,11 @@ import {
   pushContentToWorkPath,
   updateWorkRecord,
   completionPath,
+  stampTranslator,
   validateRowsHtmlTags,
   type MyStatus,
 } from '../../helper/workflow'
+import { displayUser } from '../../helper/users'
 import HistoryIcon from '../icon/HistoryIcon.vue'
 import RenameIcon from '../icon/RenameIcon.vue'
 import OpenAIIcon from '../icon/OpenAIIcon.vue'
@@ -164,7 +166,10 @@ const workStatus = ref<MyStatus>({
   blockMsg: '',
 })
 const workStatusLoaded = ref(false)
+// 当前翻译轨的认领人：校对完成时署名行要沿用他，而不是改成校对者
+const trUser = ref('')
 async function loadWorkStatus() {
+  trUser.value = ''
   workStatus.value = { activeRole: null, blocked: false, blockMsg: '' }
   workStatusLoaded.value = false
   if (!issueNumber.value || !store.octokitWrapper?.userMeta) {
@@ -178,6 +183,7 @@ async function loadWorkStatus() {
       issueNumber.value
     )
     const role = route.query.role
+    trUser.value = parseTrack(issue.body, 'tr').user
     workStatus.value = myStatusOf(
       parseTrack(issue.body, 'tr'),
       parseTrack(issue.body, 'pr'),
@@ -262,10 +268,15 @@ async function onCompleteClick() {
       ''
     )
     const outputPath = completionPath(path, title, role)
+    // 署名行记翻译轨的人：完成翻译记自己，完成校对沿用现有译者（无则记自己）
+    const stamped = stampTranslator(
+      content,
+      displayUser(role === 'tr' ? me.value : trUser.value || me.value)
+    )
     await pushContentToWorkPath(
       store.octokitWrapper,
       outputPath,
-      content,
+      stamped,
       `${TRACK_LABEL[role]}完成 ${store.jsonUrl}`
     )
     const directProofread = await updateWorkRecord(
@@ -276,10 +287,11 @@ async function onCompleteClick() {
       outputPath
     )
     if (directProofread) {
+      // 直接校对：翻译轨也记为校对者，署名行同样记他
       await pushContentToWorkPath(
         store.octokitWrapper,
         completionPath(path, title, 'tr'),
-        content,
+        stampTranslator(content, displayUser(me.value)),
         `直接校对结果同步为翻译 ${title}`
       )
     }

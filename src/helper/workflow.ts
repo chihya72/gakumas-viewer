@@ -8,6 +8,7 @@
 // 文件路径用阶段目录标记；旧 issue 的 <!-- path: data/... --> 仍可兼容。
 
 import { parseGithubBlobUrl } from './path'
+import { setCsvTranslator } from './csv'
 
 export const WORK_OWNER = import.meta.env.VITE_WORK_OWNER || 'chihya72'
 export const WORK_REPO =
@@ -188,10 +189,58 @@ export function sortBySourceCommitTime(a: DocTask, b: DocTask) {
   )
 }
 
+// 入库时间清单：一次 raw 请求换掉几百次 commit 查询。
+// 清单缺失或缺项时自动退回逐个查，所以它只是加速器，不是必需品。
+export const SOURCE_TIMES_PATH = 'source_times.json'
+let sourceTimesLoaded = false
+
+export async function loadSourceTimes(): Promise<void> {
+  if (sourceTimesLoaded) return
+  sourceTimesLoaded = true
+  try {
+    const res = await fetch(workRawUrl(SOURCE_TIMES_PATH))
+    if (!res.ok) return
+    Object.entries((await res.json()) as Record<string, string>).forEach(
+      ([title, iso]) => putCachedTime(`src:${title}`, String(iso || ''))
+    )
+  } catch {
+    // 清单不存在就当没有，逐个查
+  }
+}
+
+// 管理页手动触发：把当前所有文件的入库时间写成清单，和远端已有内容合并
+export async function saveSourceTimes(
+  wrapper: any,
+  docs: DocTask[]
+): Promise<number> {
+  const filled = await fillDocSourceCommitTimes(wrapper, docs)
+  let existing: Record<string, string> = {}
+  try {
+    const res = await fetch(workRawUrl(SOURCE_TIMES_PATH, String(Date.now())))
+    if (res.ok) existing = await res.json()
+  } catch {
+    // 首次生成
+  }
+  const next = { ...existing }
+  for (const d of filled)
+    if (d.sourceCommitTime) next[d.title] = d.sourceCommitTime
+  const sorted = Object.fromEntries(
+    Object.entries(next).sort(([a], [b]) => a.localeCompare(b))
+  )
+  await pushContentToWorkPath(
+    wrapper,
+    SOURCE_TIMES_PATH,
+    utf8ToBase64(`${JSON.stringify(sorted, null, 2)}\n`),
+    '更新入库时间清单'
+  )
+  return Object.keys(sorted).length
+}
+
 export async function fillDocSourceCommitTimes(
   wrapper: any,
   docs: DocTask[]
 ): Promise<DocTask[]> {
+  await loadSourceTimes()
   const times = await Promise.all(
     docs.map(async (d) => ({
       number: d.number,
@@ -232,7 +281,8 @@ export async function fillDocStageCommitTimes(
 export async function aiCompleteTranslation(
   wrapper: any,
   doc: { number: number; aiPath: string; translatedPath: string },
-  me: string
+  me: string,
+  displayName = ''
 ): Promise<void> {
   const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, doc.number)
   const tr = parseTrack(issue.body, 'tr')
@@ -249,7 +299,7 @@ export async function aiCompleteTranslation(
     doc.aiPath,
     true
   )
-  const b64 = (src.content as string).replace(/\n/g, '')
+  const b64 = stampTranslator(src.content as string, displayName)
   await wrapper.updateContent(
     WORK_OWNER,
     WORK_REPO,
@@ -371,6 +421,13 @@ export function stagePathForTitle(
       ? 'translated_csv'
       : 'proofread_csv'
   )
+}
+
+// 成品 CSV 的署名行改写（进出都是 base64）；translator 传展示用的个人 ID
+export function stampTranslator(b64: string, translator: string): string {
+  if (!translator) return b64
+  const text = base64ToUtf8(b64.replace(/\n/g, ''))
+  return utf8ToBase64(setCsvTranslator(text, translator))
 }
 
 export function completionPath(

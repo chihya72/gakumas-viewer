@@ -54,5 +54,20 @@ function toCsvText(info: CsvTextInfo) {
   return Papa.unparse(info.data)
 }
 
+// 成品 CSV 末行 `译者,<名字>,,` 是署名行。完成/上传时按当前译者改写，
+// 不重新 parse 整个文件，避免动到正文的引号和换行。
+function setCsvTranslator(text: string, name: string): string {
+  const value = /[",\r\n]/.test(name) ? `"${name.replace(/"/g, '""')}"` : name
+  const line = `译者,${value},,`
+  return /^译者,.*$/m.test(text)
+    ? text.replace(/^译者,.*$/m, line)
+    : `${text}${text.endsWith('\n') ? '' : '\r\n'}${line}`
+}
+
 export type { CsvDataLine }
-export { extractInfoFromCsvText, toCsvText, dataToCSV as jsonTextToCsvText }
+export {
+  extractInfoFromCsvText,
+  setCsvTranslator,
+  toCsvText,
+  dataToCSV as jsonTextToCsvText,
+}

@@ -145,6 +145,9 @@
 
       <div class="section-head">
         <h3>文件状态</h3>
+        <n-button size="small" :loading="savingTimes" @click="saveTimes">
+          更新入库时间清单
+        </n-button>
         <div v-if="selectedCount" class="batch-actions">
           <n-button
             size="small"
@@ -303,6 +306,7 @@ import {
   isArchivedIssue,
   pushContentToWorkPath,
   restoreIssue,
+  saveSourceTimes,
   stagePathForTitle,
   updateTracks,
   type DocTask,
@@ -320,6 +324,7 @@ const savingUsers = ref(false)
 const savingMe = ref(false)
 const batching = ref(false)
 const batchSaving = ref(false)
+const savingTimes = ref(false)
 const uploading = ref(false)
 const busy = ref<number | null>(null)
 const showUsers = ref(false)
@@ -487,6 +492,21 @@ async function saveDoc(d: DocTask) {
     alert(`保存状态失败：${e?.message || e}`)
   }
   busy.value = null
+}
+
+// 入库时间清单只有这里写：一次生成，之后所有页面冷启动只要 1 个请求
+async function saveTimes() {
+  if (!store.octokitWrapper) return
+  if (!confirm(`为 ${docs.value.length} 个文件生成入库时间清单？首次会较慢。`))
+    return
+  savingTimes.value = true
+  try {
+    const n = await saveSourceTimes(store.octokitWrapper, docs.value)
+    alert(`入库时间清单已更新，共 ${n} 条`)
+  } catch (e: any) {
+    alert(`生成失败：${e?.message || e}`)
+  }
+  savingTimes.value = false
 }
 
 async function batchArchive() {

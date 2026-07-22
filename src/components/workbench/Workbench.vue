@@ -253,7 +253,11 @@ import PushHeader from '../translate/push/PushHeader.vue'
 import DocFilters from './DocFilters.vue'
 import FileSaver from 'file-saver'
 import { displayUser, loadUsers } from '../../helper/users'
-import { extractInfoFromCsvText, type CsvDataLine } from '../../helper/csv'
+import {
+  extractInfoFromCsvText,
+  setCsvTranslator,
+  type CsvDataLine,
+} from '../../helper/csv'
 import {
   WORK_OWNER,
   WORK_REPO,
@@ -342,7 +346,12 @@ async function aiComplete(d: DocTask) {
   busy.value = d.number
   busyText.value = '处理中'
   try {
-    await aiCompleteTranslation(store.octokitWrapper, d, me.value)
+    await aiCompleteTranslation(
+      store.octokitWrapper,
+      d,
+      me.value,
+      displayUser(me.value)
+    )
     await refresh()
   } catch (e: any) {
     alert(`一键完成失败：${e?.message || e}`)
@@ -532,10 +541,12 @@ async function uploadCsv(d: DocTask, role: TrackKey, file: File) {
       throw new Error(
         `HTML标签无效，禁止上传：\n${tagErrors.slice(0, 5).join('\n')}`
       )
+    // 署名行始终记翻译轨的人：上传译稿记自己，上传校对稿沿用现有译者
+    const translator = displayUser(role === 'tr' ? me.value : d.tr.user)
     await pushContentToWorkPath(
       store.octokitWrapper,
       targetPath,
-      utf8ToBase64(text),
+      utf8ToBase64(setCsvTranslator(text, translator)),
       `${label}上传完成 ${d.title}`
     )
     await updateWorkRecord(
