@@ -754,7 +754,7 @@ h3 {
   min-width: 560px;
 }
 .docs {
-  min-width: 980px;
+  min-width: 1060px;
 }
 .users th:nth-child(3) {
   width: 22%;
@@ -765,22 +765,27 @@ h3 {
 .users th:nth-child(5) {
   width: 8%;
 }
+/* 列宽按位置指定，改动列顺序时必须同步这里：
+   1 勾选 / 2 入库 / 3 剧情 / 4 译者 / 5 翻译状态 / 6 校对者 / 7 校对状态 / 8 操作 */
 .docs th:nth-child(2) {
-  width: 28%;
+  width: 96px;
 }
-.docs th:nth-child(3),
-.docs th:nth-child(5) {
-  width: 17%;
+.docs th:nth-child(3) {
+  width: 28%;
 }
 .docs th:nth-child(4),
 .docs th:nth-child(6) {
+  width: 17%;
+}
+.docs th:nth-child(5),
+.docs th:nth-child(7) {
   width: 110px;
 }
-.docs th:nth-child(7) {
+.docs th:nth-child(8) {
   width: 190px;
 }
-.docs th:nth-child(7),
-.docs td:nth-child(7) {
+.docs th:nth-child(8),
+.docs td:nth-child(8) {
   text-align: center;
 }
 .docs .actions {
@@ -841,7 +846,7 @@ h3 {
   }
 
   .docs {
-    min-width: 860px;
+    min-width: 940px;
   }
 }
 </style>
