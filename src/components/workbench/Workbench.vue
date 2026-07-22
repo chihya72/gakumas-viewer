@@ -128,7 +128,7 @@
                       {{ busy === d.number ? busyText : '采用AI稿' }}
                     </n-button>
                     <n-button
-                      v-if="d.tr.user === me && d.tr.state === '进行中'"
+                      v-if="sameWorkUser(d.tr.user, me) && d.tr.state === '进行中'"
                       size="tiny"
                       type="primary"
                       @click="open(d, 'tr')"
@@ -136,7 +136,7 @@
                       开始翻译
                     </n-button>
                     <n-button
-                      v-if="d.tr.user === me && d.tr.state === '进行中'"
+                      v-if="sameWorkUser(d.tr.user, me) && d.tr.state === '进行中'"
                       size="tiny"
                       type="primary"
                       :disabled="busy === d.number"
@@ -172,7 +172,7 @@
                       {{ formatGmt8(d.prCsvTime) }}
                     </span>
                     <n-button
-                      v-if="d.pr.user === me && d.tr.state === '完成'"
+                      v-if="sameWorkUser(d.pr.user, me) && d.tr.state === '完成'"
                       class="neutral-action"
                       size="tiny"
                       @click="
@@ -183,7 +183,7 @@
                     </n-button>
                     <n-button
                       v-if="
-                        d.pr.user === me &&
+                        sameWorkUser(d.pr.user, me) &&
                         d.tr.state === '完成' &&
                         d.pr.state === '完成'
                       "
@@ -204,7 +204,7 @@
                     </n-button>
                     <n-button
                       v-if="
-                        d.pr.user === me &&
+                        sameWorkUser(d.pr.user, me) &&
                         d.tr.state === '完成' &&
                         d.pr.state !== '完成'
                       "
@@ -216,7 +216,7 @@
                     </n-button>
                     <n-button
                       v-if="
-                        d.pr.user === me &&
+                        sameWorkUser(d.pr.user, me) &&
                         d.tr.state === '完成' &&
                         d.pr.state !== '完成'
                       "
@@ -264,6 +264,7 @@ import {
   fillDocStageCommitTimes,
   aiCompleteTranslation,
   isArchivedIssue,
+  sameWorkUser,
   sortBySourceCommitTime,
   applyTrack,
   editorUrlForPath,
@@ -359,7 +360,7 @@ async function aiComplete(d: DocTask) {
 const me = computed(() => store.octokitWrapper?.userMeta?.username || '')
 
 function isMine(d: DocTask) {
-  return d.tr.user === me.value || d.pr.user === me.value
+  return sameWorkUser(d.tr.user, me.value) || sameWorkUser(d.pr.user, me.value)
 }
 const rows = computed(() =>
   onlyMine.value ? docs.value.filter(isMine) : docs.value
@@ -370,7 +371,7 @@ function canAiComplete(d: DocTask) {
     d.tr.state === '待认领' &&
     !d.tr.user &&
     !!d.pr.user &&
-    d.pr.user === me.value
+    sameWorkUser(d.pr.user, me.value)
   )
 }
 

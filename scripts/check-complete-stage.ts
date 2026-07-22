@@ -3,7 +3,10 @@
 import {
   completeStage,
   draftInfoOf,
+  myStatusOf,
+  sameWorkUser,
   saveDraft,
+  setAssigneeUsers,
   StaleRevisionError,
 } from '../src/helper/workflow'
 
@@ -294,6 +297,35 @@ const check = (name, cond, extra = '') => {
     'draft_revision 归零',
     rec.translation.draft_revision === 0,
     String(rec.translation.draft_revision)
+  )
+}
+
+// 11) 身份归一：轨道存个人 ID，登录态是 GitHub login
+{
+  setAssigneeUsers({
+    pm: { github: 'chihya72', qq: '' },
+    煉金術式: { github: '', qq: '948279048' },
+  })
+  check('个人 ID 与 login 视为同一人', sameWorkUser('pm', 'chihya72'))
+  check('反向也成立', sameWorkUser('chihya72', 'pm'))
+  check('login 大小写不敏感', sameWorkUser('pm', 'CHIHYA72'))
+  check('不同人不匹配', !sameWorkUser('pm', 'someone-else'))
+  check(
+    '空值不匹配任何人',
+    !sameWorkUser('', 'chihya72') && !sameWorkUser('pm', '')
+  )
+  check('QQ-only 成员按个人 ID 匹配', sameWorkUser('煉金術式', '煉金術式'))
+  check('空值不会命中 QQ-only 成员', !sameWorkUser('', '煉金術式'))
+
+  const tr = { user: 'pm', state: '进行中' as const }
+  const pr = { user: '', state: '待认领' as const }
+  check(
+    '我的进行中轨道可编辑',
+    myStatusOf(tr, pr, 'chihya72').activeRole === 'tr'
+  )
+  check(
+    '别人的进行中轨道不可编辑',
+    myStatusOf(tr, pr, 'someone-else').activeRole === null
   )
 }
 

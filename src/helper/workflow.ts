@@ -325,7 +325,7 @@ export async function aiCompleteTranslation(
   const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, doc.number)
   const tr = parseTrack(issue.body, 'tr')
   const pr = parseTrack(issue.body, 'pr')
-  if (tr.user || tr.state !== '待认领' || !pr.user || pr.user !== me) {
+  if (tr.user || tr.state !== '待认领' || !sameWorkUser(pr.user, me)) {
     throw new Error(
       '只有已认领校对、且翻译无人认领时，校对本人才能采用 AI 机翻稿'
     )
@@ -404,6 +404,17 @@ export function findWorkUser(
       (!!qq && item.qq === qq) ||
       (!!item.github && item.github.toLocaleLowerCase() === v.toLocaleLowerCase())
   )
+}
+
+// 轨道里存的是个人 ID（写回 body 时归一过），而登录态给的是 GitHub login，
+// 直接相等比较会让个人 ID ≠ login 的人（如 pm / chihya72）永远判不出「是我的」。
+export function sameWorkUser(a: string, b: string): boolean {
+  const x = (a || '').trim()
+  const y = (b || '').trim()
+  if (!x || !y) return false
+  if (x.toLocaleLowerCase() === y.toLocaleLowerCase()) return true
+  const idA = findWorkUser(x)?.[0]
+  return !!idA && idA === findWorkUser(y)?.[0]
 }
 
 // 把某轨道写回 body（有则替换，无则追加）
@@ -1171,9 +1182,9 @@ export function myStatusOf(
     if (tr.state === '完成') {
       if (role === 'tr')
         return { activeRole: 'tr', blocked: false, blockMsg: '' }
-      return tr.user === me ? done : none
+      return sameWorkUser(tr.user, me) ? done : none
     }
-    if (tr.user !== me) return none
+    if (!sameWorkUser(tr.user, me)) return none
     return { activeRole: 'tr', blocked: false, blockMsg: '' }
   }
   const asPr = (): MyStatus => {
@@ -1181,7 +1192,7 @@ export function myStatusOf(
     // （再次完成会覆盖 proofread_csv，校对者更新为重做者）
     if (pr.state === '完成' && role === 'pr' && tr.state === '完成')
       return { activeRole: 'pr', blocked: false, blockMsg: '' }
-    if (pr.user !== me) return none
+    if (!sameWorkUser(pr.user, me)) return none
     if (pr.state === '完成' && role !== 'pr') return done
     if (tr.state === '完成')
       return { activeRole: 'pr', blocked: false, blockMsg: '' }
