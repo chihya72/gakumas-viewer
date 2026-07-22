@@ -67,6 +67,8 @@ import {
   editorUrlForPath,
   fetchNameDict,
   fetchRawTxt,
+  fillDocSourceCommitTimes,
+  fillDocStageCommitTimes,
   formatGmt8,
   isArchivedIssue,
   workRawUrl,
@@ -100,9 +102,17 @@ async function refresh() {
       loadUsers(store.octokitWrapper),
       store.octokitWrapper.listIssues(WORK_OWNER, WORK_REPO, { state: 'closed' }),
     ])
-    rows.value = (issues as any[])
+    const loaded = (issues as any[])
       .filter((i) => !i.pull_request && !isArchivedIssue(i))
       .map(docFromIssue)
+    const withSourceTimes = await fillDocSourceCommitTimes(
+      store.octokitWrapper,
+      loaded
+    )
+    rows.value = await fillDocStageCommitTimes(
+      store.octokitWrapper,
+      withSourceTimes
+    )
     lastRefreshAt = Date.now()
   } catch (e: any) {
     error.value = `加载失败：${e?.message || e}`

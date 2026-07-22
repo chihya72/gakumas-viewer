@@ -260,8 +260,8 @@ import {
   WORK_BRANCH,
   docFromIssue,
   formatGmt8,
-  fileCommitTime,
   fillDocSourceCommitTimes,
+  fillDocStageCommitTimes,
   aiCompleteTranslation,
   isArchivedIssue,
   sortBySourceCommitTime,
@@ -433,21 +433,9 @@ async function fillCommitTimes(seq: number) {
   const w = store.octokitWrapper
   if (!w) return
   const docsWithSourceTime = await fillDocSourceCommitTimes(w, docs.value)
-  const times = await Promise.all(
-    docsWithSourceTime.map(async (d) => ({
-      number: d.number,
-      trCsvTime:
-        d.tr.state === '完成' ? await fileCommitTime(w, d.translatedPath) : '',
-      prCsvTime:
-        d.pr.state === '完成' ? await fileCommitTime(w, d.proofreadPath) : '',
-    }))
-  )
+  const docsWithTimes = await fillDocStageCommitTimes(w, docsWithSourceTime)
   if (seq !== refreshSeq) return
-  const byNumber = new Map(times.map((t) => [t.number, t]))
-  docs.value = docsWithSourceTime.map((d) => ({
-    ...d,
-    ...byNumber.get(d.number),
-  }))
+  docs.value = docsWithTimes
 }
 
 async function downloadCsvPath(path: string, title: string, label: string) {
@@ -622,7 +610,7 @@ async function claim(d: DocTask, k: TrackKey) {
 watch(
   () => store.octokitWrapper?.userMeta?.username,
   (u) => {
-    if (u) refresh()
+    if (u) refresh(true)
   }
 )
 onMounted(() => {

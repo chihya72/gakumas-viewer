@@ -158,6 +158,23 @@ export async function fillDocSourceCommitTimes(
     .sort(sortBySourceCommitTime)
 }
 
+export async function fillDocStageCommitTimes(
+  wrapper: any,
+  docs: DocTask[]
+): Promise<DocTask[]> {
+  const times = await Promise.all(
+    docs.map(async (d) => ({
+      number: d.number,
+      trCsvTime:
+        d.tr.state === '完成' ? await fileCommitTime(wrapper, d.translatedPath) : '',
+      prCsvTime:
+        d.pr.state === '完成' ? await fileCommitTime(wrapper, d.proofreadPath) : '',
+    }))
+  )
+  const byNumber = new Map(times.map((t) => [t.number, t]))
+  return docs.map((d) => ({ ...d, ...byNumber.get(d.number) }))
+}
+
 // 校对者直接采用 AI 机翻稿：
 // 1) 把 ai_csv 内容原样复制为 translated_csv 快照
 // 2) 翻译轨置 完成，译者=校对者（不保留 AI 署名）
