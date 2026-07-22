@@ -335,10 +335,10 @@ async function batchClaim(k: TrackKey) {
   batchBusy.value = false
 }
 
-// 一键完成翻译：直接采用 AI 机翻稿，译者=CSV 里的 AI 名
+// 直接校对 AI 机翻稿：译者与校对者均记为当前用户
 async function aiComplete(d: DocTask) {
   if (!store.octokitWrapper) return
-  if (!confirm(`直接采用 AI 机翻稿作为 ${d.title} 的翻译成稿？`)) return
+  if (!confirm(`直接使用 ${d.title} 的 AI 机翻稿进行校对？`)) return
   busy.value = d.number
   busyText.value = '处理中'
   try {

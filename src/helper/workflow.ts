@@ -158,10 +158,9 @@ export async function fillDocSourceCommitTimes(
     .sort(sortBySourceCommitTime)
 }
 
-// 一键完成翻译（无人接翻译、直接采用 AI 机翻稿）：
+// 校对者直接采用 AI 机翻稿：
 // 1) 把 ai_csv 内容原样复制为 translated_csv 快照
-// 2) 翻译轨置 完成，译者=机翻 CSV 里"译者"行的 AI 名
-// 只改 issue body，不动 assignees（AI 名不是 GitHub 用户，不能 assign）
+// 2) 翻译轨置 完成，译者=校对者（不保留 AI 署名）
 export async function aiCompleteTranslation(
   wrapper: any,
   doc: { number: number; aiPath: string; translatedPath: string },
@@ -183,17 +182,6 @@ export async function aiCompleteTranslation(
     true
   )
   const b64 = (src.content as string).replace(/\n/g, '')
-  // 从 CSV 里解析"译者"行的 AI 名
-  let aiName = 'AI'
-  try {
-    const text = new TextDecoder().decode(
-      Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-    )
-    const m = text.match(/^译者,([^,\r\n]+)/m)
-    if (m && m[1]) aiName = m[1].trim()
-  } catch {
-    /* 解析失败用默认名 */
-  }
   await wrapper.updateContent(
     WORK_OWNER,
     WORK_REPO,
@@ -206,11 +194,11 @@ export async function aiCompleteTranslation(
     wrapper,
     doc.translatedPath.replace(/^translated_csv\//, '').replace(/\.csv$/, '').split('/').join('_'),
     'tr',
-    aiName,
+    me,
     doc.translatedPath
   )
   const body = setTrackInBody(issue.body, 'tr', {
-    user: aiName,
+    user: me,
     state: '完成',
   })
   await wrapper.updateIssue(WORK_OWNER, WORK_REPO, doc.number, { body })
@@ -473,6 +461,7 @@ export async function updateWorkRecord(
 ) {
   const recordPath = `records/${fileId}.json`
   let operatorQq = ''
+  let operatorId = operatorGithub
   try {
     const userFile = await wrapper.getContent(
       WORK_OWNER,
@@ -487,6 +476,7 @@ export async function updateWorkRecord(
           .trim()
           .toLocaleLowerCase() === operatorGithub.toLocaleLowerCase()
     )
+    operatorId = matched?.[0] || operatorGithub
     operatorQq = String((matched?.[1] as any)?.qq || '').trim()
   } catch {
     /* 身份映射不可用时仍保留 GitHub 操作者 */
@@ -527,7 +517,7 @@ export async function updateWorkRecord(
     state,
     operator_qq: operatorQq,
     operator_github: operatorGithub,
-    display_id: operatorGithub,
+    display_id: operatorId,
     display_source: 'github',
     timestamp: now,
   }
@@ -538,7 +528,7 @@ export async function updateWorkRecord(
       path: artifactPath,
       operator_qq: operatorQq,
       operator_github: operatorGithub,
-      display_id: operatorGithub,
+      display_id: operatorId,
       display_source: 'github',
       timestamp: now,
     }
