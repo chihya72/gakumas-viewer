@@ -14,6 +14,7 @@ const Workbench = () => import('./components/workbench/Workbench.vue')
 const History = () => import('./components/workbench/History.vue')
 const Archive = () => import('./components/workbench/Archive.vue')
 const Admin = () => import('./components/workbench/Admin.vue')
+const UserWorks = () => import('./components/workbench/UserWorks.vue')
 // const ListPanel = () => import('./components/list/ListPanel.vue')
 // const CustomPanel = () => import('./components/CustomPanel.vue')
 // const VoiceSearchPanel = () =>
@@ -41,6 +42,10 @@ const router = createRouter({
     {
       path: '/archive',
       component: Archive,
+    },
+    {
+      path: '/member',
+      component: UserWorks,
     },
     {
       path: '/admin',

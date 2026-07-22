@@ -49,6 +49,7 @@ watch(locale, (newVal) => {
             <router-link :to="{ path: '/' }">工作台</router-link>
             <router-link :to="{ path: '/history' }">已完成</router-link>
             <router-link :to="{ path: '/archive' }">存档</router-link>
+            <router-link :to="{ path: '/member' }">个人记录</router-link>
             <router-link :to="{ path: '/admin' }">管理</router-link>
             <router-link :to="{ path: '/about' }">{{
               t('tab.About')
