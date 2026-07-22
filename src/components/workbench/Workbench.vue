@@ -653,7 +653,7 @@ export default {
 }
 .me {
   color: #64748b;
-  font-size: 11px;
+  font-size: 12px;
 }
 .workbench :deep(.n-button),
 .workbench :deep(.n-checkbox) {
@@ -726,7 +726,9 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  /* 与已完成/存档的 .title 保持一致：继承全局 16px + 600 */
+  font-size: 16px;
+  font-weight: 600;
   line-height: 30px;
 }
 .doc .parts {
@@ -786,8 +788,8 @@ export default {
   --n-text-color-pressed: #111827 !important;
 }
 .time {
-  color: #999;
-  font-size: 13px;
+  color: #64748b;
+  font-size: 12px;
   white-space: nowrap;
   line-height: 32px;
 }
@@ -865,7 +867,6 @@ export default {
     grid-column: 2;
     grid-row: 1;
     align-self: center;
-    font-size: 11px;
   }
 
   .grid td.doc {
