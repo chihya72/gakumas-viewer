@@ -47,7 +47,7 @@ import {
   WORK_BRANCH,
   completeStage,
   draftInfoOf,
-  fetchWorkRecord,
+  fetchRecordForWrite,
   formatGmt8,
   saveDraft,
   type TrackKey,
@@ -204,9 +204,12 @@ async function loadWorkStatus() {
     )
     const active = workStatus.value.activeRole
     if (active) {
-      // 破缓存必须用当前时刻：保存草稿不会改 issue，用 updated_at 当版本
-      // 会一直命中 CDN 里那份还没有草稿的旧记录
-      const record = await fetchWorkRecord(issue.title, String(Date.now()))
+      // 必须走 API 直读：raw.githubusercontent 会无视查询串继续返回缓存，
+      // 刚提交完再打开就会读到旧 revision，提交时被自己的 CAS 判成冲突。
+      const record = await fetchRecordForWrite(
+        store.octokitWrapper,
+        issue.title
+      )
       const key = active === 'tr' ? 'translation' : 'proofread'
       baseRevision.value = Number((record as any)?.[key]?.revision || 0)
       await prepareDraft(record, active)
