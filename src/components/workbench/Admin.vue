@@ -168,6 +168,7 @@
         v-slot="{ rows: filteredRows }"
         :docs="docs"
         :archived-numbers="archived"
+        :paged="false"
       >
         <div v-if="filteredRows.length" class="table-scroll">
           <table class="grid docs">

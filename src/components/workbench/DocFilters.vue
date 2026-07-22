@@ -63,8 +63,14 @@ const props = withDefaults(
     docs: DocTask[]
     archivedNumbers?: Set<number>
     allArchived?: boolean
+    // 没有入库时间、或需要跨全量批量操作的页（管理页）关掉按日分页
+    paged?: boolean
   }>(),
-  { archivedNumbers: () => new Set<number>(), allArchived: false }
+  {
+    archivedNumbers: () => new Set<number>(),
+    allArchived: false,
+    paged: true,
+  }
 )
 
 const story = ref<StoryKind | 'all'>('all')
@@ -107,7 +113,9 @@ const filteredRows = computed(() =>
   )
 )
 
-const dateGroups = computed(() => groupDocsByDate(filteredRows.value))
+const dateGroups = computed<[string, DocTask[]][]>(() =>
+  props.paged ? groupDocsByDate(filteredRows.value) : [['', filteredRows.value]]
+)
 // 筛选变化后 URL 里的日期可能已不存在 → 回落到最新一页，不用 watch 重置
 const activeIndex = computed(() => {
   const i = dateGroups.value.findIndex(([k]) => k === page.value)
