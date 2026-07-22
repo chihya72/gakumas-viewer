@@ -173,9 +173,14 @@ const workStatusLoaded = ref(false)
 const trUser = ref('')
 // 打开时的版本号，提交时用来判断有没有被别人抢先完成；-1 表示未知
 const baseRevision = ref(-1)
+// file_id 一律取自 Issue 标题。CSV 路径的 basename 不是 file_id
+// （proofread_csv/adv/pstory/003/hski/final-failure-01.csv 的 basename 只是 final-failure-01），
+// 用它当 file_id 会把记录写到不存在的工单上。
+const workTitle = ref('')
 async function loadWorkStatus() {
   trUser.value = ''
   baseRevision.value = -1
+  workTitle.value = ''
   workStatus.value = { activeRole: null, blocked: false, blockMsg: '' }
   workStatusLoaded.value = false
   if (!issueNumber.value || !store.octokitWrapper?.userMeta) {
@@ -189,6 +194,7 @@ async function loadWorkStatus() {
       issueNumber.value
     )
     const role = route.query.role
+    workTitle.value = issue.title
     trUser.value = parseTrack(issue.body, 'tr').user
     workStatus.value = myStatusOf(
       parseTrack(issue.body, 'tr'),
@@ -198,7 +204,9 @@ async function loadWorkStatus() {
     )
     const active = workStatus.value.activeRole
     if (active) {
-      const record = await fetchWorkRecord(issue.title, issue.updated_at)
+      // 破缓存必须用当前时刻：保存草稿不会改 issue，用 updated_at 当版本
+      // 会一直命中 CDN 里那份还没有草稿的旧记录
+      const record = await fetchWorkRecord(issue.title, String(Date.now()))
       const key = active === 'tr' ? 'translation' : 'proofread'
       baseRevision.value = Number((record as any)?.[key]?.revision || 0)
       await prepareDraft(record, active)
@@ -244,23 +252,25 @@ async function prepareDraft(record: any, role: TrackKey) {
     )
     pendingDraft.value = base64ToUtf8((file as any).content)
     draftSavedAt.value = info.timestamp
+    // 状态查询可能比内容装载慢：此时 isLoading 早已是 false，watch 不会再触发，
+    // 所以这里直接尝试一次；装载还在进行则交给 watch。
+    applyPendingDraft()
   } catch {
     // 记录里有元信息但文件已不在，忽略
   }
 }
 const draftSavedAt = ref('')
-watch(
-  () => communication.value?.isLoading,
-  (loading) => {
-    if (loading || !pendingDraft.value || !communication.value) return
-    communication.value.applyCsvText(pendingDraft.value)
-    pendingDraft.value = null
-    notification.info({
-      content: `已恢复中途保存的草稿（${formatGmt8(draftSavedAt.value)}）`,
-      duration: 3000,
-    })
-  }
-)
+function applyPendingDraft() {
+  const c = communication.value
+  if (!c || c.isLoading || !pendingDraft.value) return
+  c.applyCsvText(pendingDraft.value)
+  pendingDraft.value = null
+  notification.info({
+    content: `已恢复中途保存的草稿（${formatGmt8(draftSavedAt.value)}）`,
+    duration: 3000,
+  })
+}
+watch(() => communication.value?.isLoading, applyPendingDraft)
 
 const savingDraft = ref(false)
 async function onSaveDraft() {
@@ -273,10 +283,9 @@ async function onSaveDraft() {
   savingDraft.value = true
   try {
     const { path } = parseGithubBlobUrl(store.sourceUrl)
-    const title = (store.csvFilename || path.split('/').pop() || '').replace(
-      /\.csv$/,
-      ''
-    )
+    const title =
+      workTitle.value ||
+      (store.csvFilename || path.split('/').pop() || '').replace(/\.csv$/, '')
     const { draftRevision } = await saveDraft(store.octokitWrapper, {
       fileId: title,
       role,
@@ -347,10 +356,9 @@ async function onCompleteClick() {
   const content = store.base64content
   if (role && ok && issueNumber.value && store.octokitWrapper && content) {
     const { path } = parseGithubBlobUrl(store.sourceUrl)
-    const title = (store.csvFilename || path.split('/').pop() || '').replace(
-      /\.csv$/,
-      ''
-    )
+    const title =
+      workTitle.value ||
+      (store.csvFilename || path.split('/').pop() || '').replace(/\.csv$/, '')
     // 正式稿、备份、记录、校对 TXT 一次提交；旧稿覆盖新稿会被拒
     try {
       await completeStage(store.octokitWrapper, {
