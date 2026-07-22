@@ -45,8 +45,13 @@ import {
   applyTrack,
   pushContentToSource,
   StaleRevisionError,
+  WORK_BRANCH,
   completeStage,
+  draftInfoOf,
   fetchWorkRecord,
+  formatGmt8,
+  saveDraft,
+  type TrackKey,
   validateRowsHtmlTags,
   type MyStatus,
 } from '../../helper/workflow'
@@ -197,6 +202,7 @@ async function loadWorkStatus() {
       const record = await fetchWorkRecord(issue.title, issue.updated_at)
       const key = active === 'tr' ? 'translation' : 'proofread'
       baseRevision.value = Number((record as any)?.[key]?.revision || 0)
+      await prepareDraft(record, active)
     }
   } catch {
     /* 未登录/无 issue 时静默 */
@@ -209,6 +215,86 @@ async function loadWorkStatus() {
     workStatusLoaded.value = true
   }
 }
+// 草稿恢复：正式内容装载完成后才能覆盖，否则会被随后的装载冲掉，
+// 所以先暂存文本，等编辑器 isLoading 落回 false 再应用。
+const pendingDraft = ref<string | null>(null)
+async function prepareDraft(record: any, role: TrackKey) {
+  const info = draftInfoOf(record, role, me.value)
+  if (!info) return
+  if (!info.mine) {
+    notification.warning({
+      content: `${info.displayId} 存有一份未完成的草稿，本次不会自动恢复`,
+      duration: 4000,
+    })
+    return
+  }
+  if (info.stale) {
+    notification.warning({
+      content: `你的草稿基于第 ${info.basedOnRevision} 版，正式稿已更新到第 ${baseRevision.value} 版，已跳过恢复以免覆盖新稿`,
+      duration: 6000,
+    })
+    return
+  }
+  try {
+    const file = await store.octokitWrapper!.getContent(
+      WORK_OWNER,
+      WORK_REPO,
+      WORK_BRANCH,
+      info.path,
+      true
+    )
+    pendingDraft.value = base64ToUtf8((file as any).content)
+    draftSavedAt.value = info.timestamp
+  } catch {
+    // 记录里有元信息但文件已不在，忽略
+  }
+}
+const draftSavedAt = ref('')
+watch(
+  () => communication.value?.isLoading,
+  (loading) => {
+    if (loading || !pendingDraft.value || !communication.value) return
+    communication.value.applyCsvText(pendingDraft.value)
+    pendingDraft.value = null
+    notification.info({
+      content: `已恢复中途保存的草稿（${formatGmt8(draftSavedAt.value)}）`,
+      duration: 3000,
+    })
+  }
+)
+
+const savingDraft = ref(false)
+async function onSaveDraft() {
+  const role = workStatus.value.activeRole
+  if (!role || !issueNumber.value || !store.octokitWrapper) return
+  if (!communication.value) return
+  communication.value.updateBase64Content()
+  const content = store.base64content
+  if (!content) return
+  savingDraft.value = true
+  try {
+    const { path } = parseGithubBlobUrl(store.sourceUrl)
+    const title = (store.csvFilename || path.split('/').pop() || '').replace(
+      /\.csv$/,
+      ''
+    )
+    const { draftRevision } = await saveDraft(store.octokitWrapper, {
+      fileId: title,
+      role,
+      sourcePath: path,
+      contentB64: content,
+      operatorGithub: me.value,
+    })
+    notification.success({
+      content: `已中途保存（第 ${draftRevision} 次），正式稿未改动`,
+      duration: 2000,
+    })
+  } catch (e: any) {
+    alert(`中途保存失败：${e?.message || e}`)
+  }
+  savingDraft.value = false
+}
+
 // 底部按钮文案：有角色→翻译完成/校对完成；校对被挡→待翻译完成；否则→保存
 const completeLabel = computed(() => {
   // 工作任务(带 issue)加载状态期间显示占位，避免"保存"闪一下再变"翻译完成"
@@ -870,6 +956,17 @@ const currentDialogueCount = computed(() => {
         <n-button text type="default" :focusable="false">
           {{ t('translate.tab.rename') }}</n-button
         >
+      </div>
+      <!-- 只在自己认领的工序里出现：写草稿，不动正式稿 -->
+      <div
+        v-if="workStatus.activeRole && !workStatus.finished"
+        class="clickable"
+        @click="onSaveDraft"
+      >
+        <n-icon size="18"> <UpToTop /> </n-icon><br />
+        <n-button text type="default" :focusable="false" :loading="savingDraft">
+          中途保存
+        </n-button>
       </div>
       <div class="clickable" @click="onCompleteClick">
         <n-icon size="18">

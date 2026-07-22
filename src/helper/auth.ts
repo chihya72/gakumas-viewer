@@ -261,13 +261,14 @@ class OctokitWrapper {
 
   // 多文件一次提交：blob → tree → commit → 非强制更新 ref。
   // 非强制更新在分支被人抢先推进时返回 422，这就是 CAS 冲突检测，不做盲重试。
-  // content 传 base64；path 相同的以最后一个为准（tree 里不能有重复项）。
+  // content 传 base64；content 为 null 表示删除该路径。
+  // path 相同的以最后一个为准（tree 里不能有重复项）。
   async commitFiles(
     owner: string,
     repo: string,
     branch: string,
     message: string,
-    files: { path: string; content: string }[]
+    files: { path: string; content: string | null }[]
   ): Promise<string> {
     if (!files.length) throw new Error('没有要提交的文件')
 
@@ -284,6 +285,14 @@ class OctokitWrapper {
     const unique = [...new Map(files.map((f) => [f.path, f])).values()]
     const blobs = await Promise.all(
       unique.map(async (f) => {
+        // sha: null 是 Git Data API 表示「从树中删除」的写法
+        if (f.content === null)
+          return {
+            path: f.path,
+            mode: '100644' as const,
+            type: 'blob' as const,
+            sha: null,
+          }
         const { data } = await this.request(
           'POST /repos/{owner}/{repo}/git/blobs',
           {
@@ -298,7 +307,7 @@ class OctokitWrapper {
           path: f.path,
           mode: '100644' as const,
           type: 'blob' as const,
-          sha: data.sha,
+          sha: data.sha as string | null,
         }
       })
     )

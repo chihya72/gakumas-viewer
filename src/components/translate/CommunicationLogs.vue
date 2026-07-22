@@ -141,7 +141,11 @@ import {
   searchIndexData,
   getIndexData,
 } from '../../helper/path'
-import { CsvDataLine, toCsvText } from '../../helper/csv'
+import {
+  CsvDataLine,
+  extractInfoFromCsvText,
+  toCsvText,
+} from '../../helper/csv'
 import { processSourceInput } from '../../helper/source'
 
 export default defineComponent({
@@ -423,6 +427,15 @@ export default defineComponent({
     updateBase64Content() {
       const csv = this.getCurrentDataString()
       store.base64content = this.b64EncodeUnicode(csv)
+    },
+    // 用整段 CSV 文本替换当前内容（草稿恢复用）。不动 jsonUrl / 文件名等来源信息。
+    applyCsvText(text: string) {
+      const { data, translator } = extractInfoFromCsvText(text)
+      this.translator = translator
+      this.data = []
+      nextTick(() => {
+        this.data = data
+      })
     },
     saveCsvToLocalstorage() {
       console.log('saving')

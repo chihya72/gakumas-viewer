@@ -534,7 +534,7 @@ export async function pushContentToSource(
 // 多文件一次提交到工作仓库；内容传 base64
 export async function commitWorkFiles(
   wrapper: any,
-  files: { path: string; content: string }[],
+  files: { path: string; content: string | null }[],
   message: string
 ): Promise<string> {
   return wrapper.commitFiles(WORK_OWNER, WORK_REPO, WORK_BRANCH, message, files)
@@ -860,6 +860,104 @@ export async function syncRecordTracks(
 
 export class StaleRevisionError extends Error {}
 
+export function draftPath(
+  sourcePath: string,
+  fileId: string,
+  role: TrackKey
+): string {
+  return stagePathFromAny(
+    sourcePath,
+    fileId,
+    role === 'tr' ? 'translated_draft' : 'proofread_draft'
+  )
+}
+
+const DRAFT_KEY = { tr: 'translation_draft', pr: 'proofread_draft' } as const
+
+// 中途保存：只写草稿和记录，正式稿与完成状态一律不动。
+// 草稿记下它基于哪一版正式稿，恢复时据此判断是否已过期。
+export async function saveDraft(
+  wrapper: any,
+  opts: {
+    fileId: string
+    role: TrackKey
+    sourcePath: string
+    contentB64: string
+    operatorGithub: string
+  }
+): Promise<{ draftRevision: number; baseRevision: number }> {
+  const { fileId, role, sourcePath, operatorGithub } = opts
+  const key = role === 'tr' ? 'translation' : 'proofread'
+  const record = await fetchRecordForWrite(wrapper, fileId)
+  const { operatorQq, operatorId } = await resolveOperator(
+    wrapper,
+    operatorGithub
+  )
+  const path = draftPath(sourcePath, fileId, role)
+  const baseRevision = Number(record[key]?.revision || 0)
+  const draftRevision = Number(record[key]?.draft_revision || 0) + 1
+  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
+  record[key] = { ...(record[key] || {}), draft_revision: draftRevision }
+  record.artifacts = record.artifacts || {}
+  record.artifacts[DRAFT_KEY[role]] = {
+    path,
+    operator_qq: operatorQq,
+    operator_github: operatorGithub,
+    display_id: operatorId,
+    display_source: 'github',
+    based_on_revision: baseRevision,
+    timestamp: now,
+  }
+  record.github = { ...(record.github || {}), updated_at: now }
+  await commitWorkFiles(
+    wrapper,
+    [
+      { path, content: opts.contentB64 },
+      {
+        path: `records/${fileId}.json`,
+        content: utf8ToBase64(JSON.stringify(record, null, 2) + '\n'),
+      },
+    ],
+    `${TRACK_LABEL[role]}中途保存 ${fileId}`
+  )
+  return { draftRevision, baseRevision }
+}
+
+export interface DraftInfo {
+  path: string
+  operatorGithub: string
+  displayId: string
+  basedOnRevision: number
+  timestamp: string
+  /** 基准版本已被推进，草稿内容落后于正式稿 */
+  stale: boolean
+  /** 草稿是别人存的 */
+  mine: boolean
+}
+
+// 只读草稿元信息；内容另行取，避免打开只读页时也白下一份
+export function draftInfoOf(
+  record: any,
+  role: TrackKey,
+  meGithub: string
+): DraftInfo | null {
+  const meta = record?.artifacts?.[DRAFT_KEY[role]]
+  if (!meta?.path) return null
+  const key = role === 'tr' ? 'translation' : 'proofread'
+  return {
+    path: meta.path,
+    operatorGithub: meta.operator_github || '',
+    displayId: meta.display_id || meta.operator_github || '',
+    basedOnRevision: Number(meta.based_on_revision || 0),
+    timestamp: meta.timestamp || '',
+    stale: Number(meta.based_on_revision || 0) !== Number(record[key]?.revision || 0),
+    mine:
+      !!meGithub &&
+      (meta.operator_github || '').toLocaleLowerCase() ===
+        meGithub.toLocaleLowerCase(),
+  }
+}
+
 // 阶段完成事务：正式稿、备份、记录、校对 TXT 一次提交完成。
 // baseRevision 是打开编辑器时看到的版本；提交前比对，旧稿不能覆盖新稿。
 // 传 -1 表示放弃校验（无法确定基准版本的入口，如批量上传）。
@@ -887,7 +985,15 @@ export async function completeStage(
 
   const outputPath = completionPath(sourcePath, fileId, role)
   const stamped = stampTranslator(opts.contentB64, opts.translatorDisplay)
-  const files: { path: string; content: string }[] = []
+  const files: { path: string; content: string | null }[] = []
+
+  // 草稿已晋升为正式稿，同一提交里删掉，避免下次打开又恢复出旧内容
+  const draft = record.artifacts?.[role === 'tr' ? 'translation_draft' : 'proofread_draft']
+  if (draft?.path) {
+    files.push({ path: draft.path, content: null })
+    delete record.artifacts[role === 'tr' ? 'translation_draft' : 'proofread_draft']
+    record[key] = { ...(record[key] || {}), draft_revision: 0 }
+  }
 
   // 旧正式稿轮换为唯一显式备份；内容没变就不必留
   const backupDir = role === 'tr' ? 'translated_backup' : 'proofread_backup'

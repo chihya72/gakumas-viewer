@@ -1,6 +1,11 @@
 // completeStage 实跑检查：假 wrapper 记录提交了哪些文件，不碰网络。
 // 跑法：npm run check:stage
-import { completeStage, StaleRevisionError } from '../src/helper/workflow'
+import {
+  completeStage,
+  draftInfoOf,
+  saveDraft,
+  StaleRevisionError,
+} from '../src/helper/workflow'
 
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64')
 const un = (s) => Buffer.from(s, 'base64').toString('utf8')
@@ -18,7 +23,9 @@ function makeWrapper({ record, existingOutput }) {
         return { content: b64(JSON.stringify(record)) }
       }
       if (path === 'users.json')
-        return { content: b64(JSON.stringify({ 悸动: { github: 'kkdou3', qq: '' } })) }
+        return {
+          content: b64(JSON.stringify({ 悸动: { github: 'kkdou3', qq: '' } })),
+        }
       if (existingOutput && path === existingOutput.path)
         return { content: b64(existingOutput.text) }
       throw { response: { status: 404 } }
@@ -33,7 +40,7 @@ function makeWrapper({ record, existingOutput }) {
 globalThis.fetch = async () => ({ ok: false })
 globalThis.localStorage = {
   getItem: () => null,
-  setItem: () => {},
+  setItem: () => undefined,
 }
 
 const base = {
@@ -52,22 +59,47 @@ const check = (name, cond, extra = '') => {
 
 // 1) 版本一致 → 正常提交
 {
-  const w = makeWrapper({ record: { translation: { revision: 3 }, proofread: {} } })
+  const w = makeWrapper({
+    record: { translation: { revision: 3 }, proofread: {} },
+  })
   const r = await completeStage(w, { ...base, role: 'tr', baseRevision: 3 })
   const files = w.commits[0].files.map((f) => f.path)
   check('版本一致可提交', w.commits.length === 1)
-  check('一次提交包含正式稿与记录', files.includes(base.sourcePath) && files.includes('records/adv_dear_hume_099.json'), JSON.stringify(files))
-  const rec = JSON.parse(un(w.commits[0].files.find((f) => f.path.endsWith('.json')).content))
-  check('revision 递增 3→4', rec.translation.revision === 4, String(rec.translation.revision))
+  check(
+    '一次提交包含正式稿与记录',
+    files.includes(base.sourcePath) &&
+      files.includes('records/adv_dear_hume_099.json'),
+    JSON.stringify(files)
+  )
+  const rec = JSON.parse(
+    un(w.commits[0].files.find((f) => f.path.endsWith('.json')).content)
+  )
+  check(
+    'revision 递增 3→4',
+    rec.translation.revision === 4,
+    String(rec.translation.revision)
+  )
   check('记录写入操作者', rec.translation.display_id === '悸动')
-  check('时间戳为秒级 Z', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(rec.translation.timestamp), rec.translation.timestamp)
-  const out = un(w.commits[0].files.find((f) => f.path === base.sourcePath).content)
-  check('署名行已写入', out.trim().endsWith('译者,悸动,,'), JSON.stringify(out.slice(-14)))
+  check(
+    '时间戳为秒级 Z',
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(rec.translation.timestamp),
+    rec.translation.timestamp
+  )
+  const out = un(
+    w.commits[0].files.find((f) => f.path === base.sourcePath).content
+  )
+  check(
+    '署名行已写入',
+    out.trim().endsWith('译者,悸动,,'),
+    JSON.stringify(out.slice(-14))
+  )
 }
 
 // 2) 版本落后 → 拒绝，且不提交任何内容
 {
-  const w = makeWrapper({ record: { translation: { revision: 5 }, proofread: {} } })
+  const w = makeWrapper({
+    record: { translation: { revision: 5 }, proofread: {} },
+  })
   let err = null
   try {
     await completeStage(w, { ...base, role: 'tr', baseRevision: 3 })
@@ -76,12 +108,17 @@ const check = (name, cond, extra = '') => {
   }
   check('旧稿被拒绝', err instanceof StaleRevisionError)
   check('拒绝时未产生提交', w.commits.length === 0)
-  check('提示含两个版本号', /第 3 版/.test(err?.message || '') && /第 5 版/.test(err?.message || ''))
+  check(
+    '提示含两个版本号',
+    /第 3 版/.test(err?.message || '') && /第 5 版/.test(err?.message || '')
+  )
 }
 
 // 3) baseRevision = -1 → 跳过校验
 {
-  const w = makeWrapper({ record: { translation: { revision: 9 }, proofread: {} } })
+  const w = makeWrapper({
+    record: { translation: { revision: 9 }, proofread: {} },
+  })
   await completeStage(w, { ...base, role: 'tr', baseRevision: -1 })
   check('-1 跳过 CAS', w.commits.length === 1)
 }
@@ -94,7 +131,11 @@ const check = (name, cond, extra = '') => {
   })
   await completeStage(w, { ...base, role: 'tr', baseRevision: 1 })
   const files = w.commits[0].files.map((f) => f.path)
-  check('旧稿轮换为备份', files.includes('translated_backup/adv/dear/hume/099.csv'), JSON.stringify(files))
+  check(
+    '旧稿轮换为备份',
+    files.includes('translated_backup/adv/dear/hume/099.csv'),
+    JSON.stringify(files)
+  )
   const backup = w.commits[0].files.find((f) => f.path.includes('_backup'))
   check('备份内容是旧稿', un(backup.content) === '旧的正式稿内容')
 }
@@ -108,13 +149,21 @@ const check = (name, cond, extra = '') => {
   })
   await completeStage(w, { ...base, role: 'tr', baseRevision: 1 })
   const files = w.commits[0].files.map((f) => f.path)
-  check('内容未变不留备份', !files.some((p) => p.includes('_backup')), JSON.stringify(files))
+  check(
+    '内容未变不留备份',
+    !files.some((p) => p.includes('_backup')),
+    JSON.stringify(files)
+  )
 }
 
 // 6) 直接校对 → 翻译轨同步一份
 {
   const w = makeWrapper({
-    record: { translation: { revision: 0 }, proofread: { revision: 0 }, direct_machine_proofread: true },
+    record: {
+      translation: { revision: 0 },
+      proofread: { revision: 0 },
+      direct_machine_proofread: true,
+    },
   })
   const r = await completeStage(w, {
     ...base,
@@ -124,15 +173,128 @@ const check = (name, cond, extra = '') => {
   })
   const files = w.commits[0].files.map((f) => f.path)
   check('直接校对返回 true', r.directProofread === true)
-  check('同步写入翻译稿', files.includes('translated_csv/adv/dear/hume/099.csv'), JSON.stringify(files))
+  check(
+    '同步写入翻译稿',
+    files.includes('translated_csv/adv/dear/hume/099.csv'),
+    JSON.stringify(files)
+  )
 }
 
 // 7) 记录不存在 → 用空骨架，不炸
 {
   const w = makeWrapper({ record: null })
   await completeStage(w, { ...base, role: 'tr', baseRevision: 0 })
-  const rec = JSON.parse(un(w.commits[0].files.find((f) => f.path.endsWith('.json')).content))
-  check('缺记录时新建骨架', rec.file_id === 'adv_dear_hume_099' && rec.category === 'dear', rec.category)
+  const rec = JSON.parse(
+    un(w.commits[0].files.find((f) => f.path.endsWith('.json')).content)
+  )
+  check(
+    '缺记录时新建骨架',
+    rec.file_id === 'adv_dear_hume_099' && rec.category === 'dear',
+    rec.category
+  )
+}
+
+// 8) 中途保存：只写草稿和记录，不碰正式稿与状态
+{
+  const w = makeWrapper({
+    record: { translation: { revision: 2, state: '进行中' }, proofread: {} },
+  })
+  const r = await saveDraft(w, {
+    fileId: base.fileId,
+    role: 'tr',
+    sourcePath: base.sourcePath,
+    contentB64: base.contentB64,
+    operatorGithub: 'kkdou3',
+  })
+  const files = w.commits[0].files.map((f) => f.path)
+  check(
+    '草稿写入 translated_draft',
+    files.includes('translated_draft/adv/dear/hume/099.csv'),
+    JSON.stringify(files)
+  )
+  check('不触碰正式稿', !files.includes(base.sourcePath))
+  const rec = JSON.parse(
+    un(w.commits[0].files.find((f) => f.path.endsWith('.json')).content)
+  )
+  check(
+    '正式 revision 不变',
+    rec.translation.revision === 2,
+    String(rec.translation.revision)
+  )
+  check(
+    '完成状态不变',
+    rec.translation.state === '进行中',
+    rec.translation.state
+  )
+  check('draft_revision 递增', rec.translation.draft_revision === 1)
+  check('记下基准版本', rec.artifacts.translation_draft.based_on_revision === 2)
+  check('返回值一致', r.draftRevision === 1 && r.baseRevision === 2)
+}
+
+// 9) 草稿新鲜度与归属判定
+{
+  const mk = (basedOn: number, revision: number, who: string) => ({
+    translation: { revision },
+    artifacts: {
+      translation_draft: {
+        path: 'p.csv',
+        based_on_revision: basedOn,
+        operator_github: who,
+        display_id: who,
+      },
+    },
+  })
+  check(
+    '同版本且本人 → 可恢复',
+    (() => {
+      const i = draftInfoOf(mk(2, 2, 'kkdou3'), 'tr', 'kkdou3')!
+      return !i.stale && i.mine
+    })()
+  )
+  check(
+    '正式稿已推进 → 过期',
+    draftInfoOf(mk(2, 3, 'kkdou3'), 'tr', 'kkdou3')!.stale
+  )
+  check(
+    '他人草稿 → 非本人',
+    !draftInfoOf(mk(2, 2, 'other'), 'tr', 'kkdou3')!.mine
+  )
+  check(
+    '大小写不同的同一人',
+    draftInfoOf(mk(2, 2, 'KKDou3'), 'tr', 'kkdou3')!.mine
+  )
+  check(
+    '无草稿返回 null',
+    draftInfoOf({ translation: { revision: 1 } }, 'tr', 'kkdou3') === null
+  )
+}
+
+// 10) 完成时删除草稿并清空元信息
+{
+  const w = makeWrapper({
+    record: {
+      translation: { revision: 1, draft_revision: 3 },
+      proofread: {},
+      artifacts: {
+        translation_draft: { path: 'translated_draft/adv/dear/hume/099.csv' },
+      },
+    },
+  })
+  await completeStage(w, { ...base, role: 'tr', baseRevision: 1 })
+  const del = w.commits[0].files.find((f) => f.path.includes('_draft'))
+  check('草稿被删除', del?.content === null, JSON.stringify(del))
+  const rec = JSON.parse(
+    un(
+      w.commits[0].files.find((f) => f.path.endsWith('records/')) ??
+        w.commits[0].files.find((f) => f.path.endsWith('.json')).content
+    )
+  )
+  check('元信息已清除', rec.artifacts.translation_draft === undefined)
+  check(
+    'draft_revision 归零',
+    rec.translation.draft_revision === 0,
+    String(rec.translation.draft_revision)
+  )
 }
 
 console.log(fail ? `\n${fail} 个用例失败` : '\n全部通过')
