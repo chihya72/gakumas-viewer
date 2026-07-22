@@ -9,6 +9,7 @@
 
 import { parseGithubBlobUrl } from './path'
 import { setCsvTranslator } from './csv'
+import { storyKind } from './document-filter'
 
 export const WORK_OWNER = import.meta.env.VITE_WORK_OWNER || 'chihya72'
 export const WORK_REPO =
@@ -269,9 +270,14 @@ export async function fetchWorkRecord(
 // 完成时间取"文件最后提交"与"记录时间戳"中较早的一个。
 // 两个来源各有失真：回填出来的文件提交时间偏晚，迁移过的记录时间戳也偏晚；
 // 但完成不可能晚于最早的那份证据，取较早的能同时躲开两种情况。
+// 按时刻比较：记录里有 33 条是 +08:00 带微秒的格式，字符串比较会把它判成更晚
 function earlier(a: string, b: string): string {
   if (!a || !b) return a || b
-  return a < b ? a : b
+  const ta = Date.parse(a)
+  const tb = Date.parse(b)
+  if (Number.isNaN(ta)) return b
+  if (Number.isNaN(tb)) return a
+  return ta <= tb ? a : b
 }
 
 export async function fillDocStageCommitTimes(
@@ -654,7 +660,8 @@ export async function updateWorkRecord(
     schema_version: 1,
     file_id: fileId,
     batch: '',
-    category: artifactPath.split('/')[1] || '',
+    // 路径第二段永远是 adv，剧情类型要从 file_id 解析
+    category: storyKind(fileId),
     force_complete: { translation: false, proofread: false },
     translation: { revision: 0, draft_revision: 0 },
     proofread: { revision: 0, draft_revision: 0 },
