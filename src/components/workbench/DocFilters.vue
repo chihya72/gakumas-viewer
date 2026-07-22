@@ -23,17 +23,36 @@
       placeholder="搜索文件名"
     />
     <span class="filter-count" aria-live="polite">
-      {{ filteredRows.length }} / {{ docs.length }}
+      {{ pagedRows.length }} / {{ filteredRows.length }} / {{ docs.length }}
     </span>
   </div>
-  <slot :rows="filteredRows" />
+  <div v-if="dateGroups.length > 1" class="doc-pager">
+    <n-button size="small" :disabled="activeIndex <= 0" @click="go(-1)">
+      上一页
+    </n-button>
+    <span class="pager-label" aria-live="polite">
+      {{ datePageLabel(activeKey, pagedRows.length) }} · {{ activeIndex + 1 }} /
+      {{ dateGroups.length }}
+    </span>
+    <n-button
+      size="small"
+      :disabled="activeIndex >= dateGroups.length - 1"
+      @click="go(1)"
+    >
+      下一页
+    </n-button>
+  </div>
+  <slot :rows="pagedRows" />
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { NInput, NSelect } from 'naive-ui'
+import { useRoute, useRouter } from 'vue-router'
+import { NButton, NInput, NSelect } from 'naive-ui'
 import type { DocTask } from '../../helper/workflow'
 import {
+  datePageLabel,
+  groupDocsByDate,
   matchesDocFilters,
   type DocStatus,
   type StoryKind,
@@ -51,6 +70,10 @@ const props = withDefaults(
 const story = ref<StoryKind | 'all'>('all')
 const status = ref<DocStatus | 'all'>('all')
 const search = ref('')
+const route = useRoute()
+const router = useRouter()
+// 页码存在 URL 的 ?d=YYYY-MM-DD，刷新和分享链接都能回到同一页
+const page = computed(() => String(route.query.d || ''))
 
 const storyOptions = [
   { label: '全部剧情', value: 'all' },
@@ -83,6 +106,21 @@ const filteredRows = computed(() =>
     )
   )
 )
+
+const dateGroups = computed(() => groupDocsByDate(filteredRows.value))
+// 筛选变化后 URL 里的日期可能已不存在 → 回落到最新一页，不用 watch 重置
+const activeIndex = computed(() => {
+  const i = dateGroups.value.findIndex(([k]) => k === page.value)
+  return i < 0 ? 0 : i
+})
+const activeKey = computed(() => dateGroups.value[activeIndex.value]?.[0] ?? '')
+const pagedRows = computed(() => dateGroups.value[activeIndex.value]?.[1] ?? [])
+
+function go(step: number) {
+  const key = dateGroups.value[activeIndex.value + step]?.[0]
+  if (key === undefined) return
+  router.replace({ query: { ...route.query, d: key || undefined } })
+}
 </script>
 
 <style scoped>
@@ -99,6 +137,18 @@ const filteredRows = computed(() =>
   width: min(280px, 100%);
 }
 .filter-count {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.doc-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+.pager-label {
   color: #64748b;
   font-size: 12px;
   white-space: nowrap;
