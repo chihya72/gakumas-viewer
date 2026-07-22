@@ -486,6 +486,15 @@ export async function pushContentToSource(
   return wrapper.updateContent(owner, repo, branch, path, message, base64)
 }
 
+// 多文件一次提交到工作仓库；内容传 base64
+export async function commitWorkFiles(
+  wrapper: any,
+  files: { path: string; content: string }[],
+  message: string
+): Promise<string> {
+  return wrapper.commitFiles(WORK_OWNER, WORK_REPO, WORK_BRANCH, message, files)
+}
+
 export async function pushContentToWorkPath(
   wrapper: any,
   path: string,

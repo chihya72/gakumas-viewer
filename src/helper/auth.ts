@@ -259,6 +259,90 @@ class OctokitWrapper {
     }
   }
 
+  // 多文件一次提交：blob → tree → commit → 非强制更新 ref。
+  // 非强制更新在分支被人抢先推进时返回 422，这就是 CAS 冲突检测，不做盲重试。
+  // content 传 base64；path 相同的以最后一个为准（tree 里不能有重复项）。
+  async commitFiles(
+    owner: string,
+    repo: string,
+    branch: string,
+    message: string,
+    files: { path: string; content: string }[]
+  ): Promise<string> {
+    if (!files.length) throw new Error('没有要提交的文件')
+
+    const { data: ref } = await this.request(
+      'GET /repos/{owner}/{repo}/git/ref/{ref}',
+      { owner, repo, ref: `heads/${branch}`, headers: this.headers }
+    )
+    const headSha: string = ref.object.sha
+    const { data: head } = await this.request(
+      'GET /repos/{owner}/{repo}/git/commits/{commit_sha}',
+      { owner, repo, commit_sha: headSha, headers: this.headers }
+    )
+
+    const unique = [...new Map(files.map((f) => [f.path, f])).values()]
+    const blobs = await Promise.all(
+      unique.map(async (f) => {
+        const { data } = await this.request(
+          'POST /repos/{owner}/{repo}/git/blobs',
+          {
+            owner,
+            repo,
+            content: f.content.replace(/\n/g, ''),
+            encoding: 'base64',
+            headers: this.headers,
+          }
+        )
+        return {
+          path: f.path,
+          mode: '100644' as const,
+          type: 'blob' as const,
+          sha: data.sha,
+        }
+      })
+    )
+
+    const { data: tree } = await this.request(
+      'POST /repos/{owner}/{repo}/git/trees',
+      {
+        owner,
+        repo,
+        base_tree: head.tree.sha,
+        tree: blobs,
+        headers: this.headers,
+      }
+    )
+    const { data: commit } = await this.request(
+      'POST /repos/{owner}/{repo}/git/commits',
+      {
+        owner,
+        repo,
+        message,
+        tree: tree.sha,
+        parents: [headSha],
+        headers: this.headers,
+      }
+    )
+    try {
+      await this.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', {
+        owner,
+        repo,
+        ref: `heads/${branch}`,
+        sha: commit.sha,
+        force: false,
+        headers: this.headers,
+      })
+    } catch (e: any) {
+      if (e?.response?.status === 422)
+        throw new Error(
+          `分支已被其他人推进（${headSha.slice(0, 7)} 已过期），请刷新后重试`
+        )
+      throw e
+    }
+    return commit.sha
+  }
+
   async getOpenPR(owner: string, repo: string, head: string) {
     const { data } = await this.request('GET /repos/{owner}/{repo}/pulls', {
       owner,
