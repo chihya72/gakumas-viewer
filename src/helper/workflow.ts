@@ -727,6 +727,8 @@ export function applyRecordTrack(
   opts: {
     role: TrackKey
     state: TrackState
+    /** 内容未变的幂等提交：照写记录，但不推进版本 */
+    keepRevision?: boolean
     artifactPath: string
     directMachine: boolean
     operatorQq: string
@@ -750,7 +752,7 @@ export function applyRecordTrack(
   record[key] = {
     ...track,
     revision:
-      state === '完成'
+      state === '完成' && !opts.keepRevision
         ? Number(track.revision || 0) + 1
         : Number(track.revision || 0),
     draft_revision: Number(track.draft_revision || 0),
@@ -1031,6 +1033,7 @@ export async function completeStage(
 
   // 旧正式稿轮换为唯一显式备份；内容没变就不必留
   const backupDir = role === 'tr' ? 'translated_backup' : 'proofread_backup'
+  let unchanged = false
   try {
     const old = await wrapper.getContent(
       WORK_OWNER,
@@ -1040,7 +1043,8 @@ export async function completeStage(
       true
     )
     const oldB64 = (old.content as string).replace(/\n/g, '')
-    if (oldB64 !== stamped)
+    if (oldB64 === stamped) unchanged = true
+    else
       files.push({
         path: stagePathFromAny(sourcePath, fileId, backupDir),
         content: oldB64,
@@ -1050,6 +1054,10 @@ export async function completeStage(
   }
   files.push({ path: outputPath, content: stamped })
 
+  // 协议第 7 节：内容与现有正式稿完全相同且已完成 → 幂等成功，不增加版本。
+  // 仍然写记录（操作者可能变了，例如重做），只是 revision 保持不动。
+  const idempotent = unchanged && record[key]?.state === '完成'
+
   const { operatorQq, operatorId } = await resolveOperator(
     wrapper,
     operatorGithub
@@ -1057,6 +1065,7 @@ export async function completeStage(
   const directProofread = applyRecordTrack(record, {
     role,
     state: '完成',
+    keepRevision: idempotent,
     artifactPath: outputPath,
     directMachine: false,
     operatorQq,

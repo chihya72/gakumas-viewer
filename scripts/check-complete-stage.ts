@@ -301,7 +301,53 @@ const check = (name, cond, extra = '') => {
   )
 }
 
-// 11) 身份归一：轨道存个人 ID，登录态是 GitHub login
+// 11) 幂等：内容与现有正式稿相同且已完成 → 不推进版本（协议第 7 节）
+{
+  const stampedSame = CSV.replace('译者,,,', '译者,悸动,,')
+  const w = makeWrapper({
+    record: {
+      translation: { revision: 4, state: '完成' },
+      proofread: {},
+    },
+    existingOutput: { path: base.sourcePath, text: stampedSame },
+  })
+  await completeStage(w, { ...base, role: 'tr', baseRevision: 4 })
+  const rec = JSON.parse(
+    un(w.commits[0].files.find((f) => f.path.endsWith('.json')).content)
+  )
+  check(
+    '内容相同不涨版本',
+    rec.translation.revision === 4,
+    String(rec.translation.revision)
+  )
+  check('仍然刷新操作者', rec.translation.display_id === '悸动')
+  check(
+    '幂等提交不留备份',
+    !w.commits[0].files.some((f) => f.path.includes('_backup'))
+  )
+}
+
+// 12) 内容变了则照常推进版本，且只保留一份备份
+{
+  const w = makeWrapper({
+    record: { translation: { revision: 4, state: '完成' }, proofread: {} },
+    existingOutput: { path: base.sourcePath, text: '上一版内容' },
+  })
+  await completeStage(w, { ...base, role: 'tr', baseRevision: 4 })
+  const rec = JSON.parse(
+    un(w.commits[0].files.find((f) => f.path.endsWith('.json')).content)
+  )
+  check(
+    '内容变了版本 +1',
+    rec.translation.revision === 5,
+    String(rec.translation.revision)
+  )
+  const backups = w.commits[0].files.filter((f) => f.path.includes('_backup'))
+  check('备份只有一份', backups.length === 1, String(backups.length))
+  check('备份是上一版', un(backups[0].content) === '上一版内容')
+}
+
+// 13) 身份归一：轨道存个人 ID，登录态是 GitHub login
 {
   setAssigneeUsers({
     pm: { github: 'chihya72', qq: '1072536235' },
