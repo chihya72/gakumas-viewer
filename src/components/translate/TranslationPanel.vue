@@ -43,7 +43,6 @@ import {
   parseTrack,
   myStatusOf,
   applyTrack,
-  pushContentToSource,
   StaleRevisionError,
   WORK_BRANCH,
   completeStage,
@@ -311,7 +310,11 @@ function base64ToUtf8(b64: string): string {
   const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
   return new TextDecoder().decode(bytes)
 }
-async function pushCurrent(silent = false) {
+// 取当前编辑内容并校验。
+// 这里刻意不再回写「打开时的那个文件」——新翻译是从 ai_csv 打开的，
+// 回写会把人工译文覆盖到机翻稿上（已污染 15 个 ai_csv）。
+// 正式产物由 completeStage 写，中途内容由「中途保存」写草稿。
+function prepareContent(): boolean {
   if (!communication.value || !store.octokitWrapper || !isWorkFile.value)
     return false
   communication.value.updateBase64Content()
@@ -319,23 +322,10 @@ async function pushCurrent(silent = false) {
   const { data } = extractInfoFromCsvText(base64ToUtf8(store.base64content))
   const tagErrors = validateRowsHtmlTags(data)
   if (tagErrors.length) {
-    alert(`HTML标签无效，禁止保存：\n${tagErrors.slice(0, 5).join('\n')}`)
+    alert(`HTML标签无效，禁止提交：\n${tagErrors.slice(0, 5).join('\n')}`)
     return false
   }
-  try {
-    await pushContentToSource(
-      store.octokitWrapper,
-      store.sourceUrl,
-      store.base64content,
-      `更新翻译 ${store.jsonUrl}`
-    )
-    if (!silent)
-      notification.success({ content: '已保存到仓库', duration: 1500 })
-    return true
-  } catch (e: any) {
-    alert(e?.message || e)
-    return false
-  }
+  return true
 }
 async function onCompleteClick() {
   if (workStatus.value.blocked) {
@@ -352,7 +342,7 @@ async function onCompleteClick() {
     alert('未认领当前工序，不能提交')
     return
   }
-  const ok = await pushCurrent(!!workStatus.value.activeRole)
+  const ok = prepareContent()
   const role = workStatus.value.activeRole
   const content = store.base64content
   if (role && ok && issueNumber.value && store.octokitWrapper && content) {
