@@ -694,9 +694,11 @@ h3 {
   width: 34px;
   text-align: center;
 }
-.users th:nth-child(1),
+.users th:nth-child(1) {
+  width: 22%;
+}
 .users th:nth-child(2) {
-  width: 34%;
+  width: 25%;
 }
 .users {
   min-width: 560px;
@@ -705,10 +707,13 @@ h3 {
   min-width: 980px;
 }
 .users th:nth-child(3) {
-  width: 120px;
+  width: 22%;
 }
 .users th:nth-child(4) {
-  width: 70px;
+  width: 15%;
+}
+.users th:nth-child(5) {
+  width: 8%;
 }
 .docs th:nth-child(2) {
   width: 28%;
