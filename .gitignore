@@ -32,3 +32,6 @@ public/GAMEUPDATES.html
 scripts/maintain/
 _book
 pr
+
+# 其他工具留下的附件缓存
+.codex-remote-attachments/
