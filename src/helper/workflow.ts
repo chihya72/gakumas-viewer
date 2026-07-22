@@ -254,22 +254,54 @@ export async function fillDocSourceCommitTimes(
     .sort(sortBySourceCommitTime)
 }
 
+export async function fetchWorkRecord(
+  title: string,
+  version = ''
+): Promise<any | null> {
+  try {
+    const res = await fetch(workRawUrl(`records/${title}.json`, version))
+    return res.ok ? await res.json() : null
+  } catch {
+    return null
+  }
+}
+
+// 完成时间取"文件最后提交"与"记录时间戳"中较早的一个。
+// 两个来源各有失真：回填出来的文件提交时间偏晚，迁移过的记录时间戳也偏晚；
+// 但完成不可能晚于最早的那份证据，取较早的能同时躲开两种情况。
+function earlier(a: string, b: string): string {
+  if (!a || !b) return a || b
+  return a < b ? a : b
+}
+
 export async function fillDocStageCommitTimes(
   wrapper: any,
   docs: DocTask[]
 ): Promise<DocTask[]> {
   const times = await Promise.all(
-    docs.map(async (d) => ({
-      number: d.number,
-      trCsvTime:
+    docs.map(async (d) => {
+      const done = d.tr.state === '完成' || d.pr.state === '完成'
+      const [record, trFile, prFile] = await Promise.all([
+        done ? fetchWorkRecord(d.title, d.updatedAt) : null,
         d.tr.state === '完成'
-          ? await fileCommitTime(wrapper, d.translatedPath, d.updatedAt)
+          ? fileCommitTime(wrapper, d.translatedPath, d.updatedAt)
           : '',
-      prCsvTime:
         d.pr.state === '完成'
-          ? await fileCommitTime(wrapper, d.proofreadPath, d.updatedAt)
+          ? fileCommitTime(wrapper, d.proofreadPath, d.updatedAt)
           : '',
-    }))
+      ])
+      return {
+        number: d.number,
+        trCsvTime:
+          d.tr.state === '完成'
+            ? earlier(trFile, record?.translation?.timestamp || '')
+            : '',
+        prCsvTime:
+          d.pr.state === '完成'
+            ? earlier(prFile, record?.proofread?.timestamp || '')
+            : '',
+      }
+    })
   )
   const byNumber = new Map(times.map((t) => [t.number, t]))
   return docs.map((d) => ({ ...d, ...byNumber.get(d.number) }))
