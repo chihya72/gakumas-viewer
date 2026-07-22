@@ -100,12 +100,15 @@ export async function saveMyName(wrapper: any, github: string, name: string) {
 
 export function displayUser(user: string): string {
   const value = user.trim()
+  // 空值不能参与匹配：只填 QQ 的成员 github 为空，会把"无人认领"认成他
+  if (!value) return ''
   const qq = value.startsWith('qq-') ? value.slice(3) : ''
   return (
     Object.entries(users).find(
       ([, item]) =>
         (!!qq && item.qq === qq) ||
-        item.github?.toLocaleLowerCase() === value.toLocaleLowerCase()
+        (!!item.github &&
+          item.github.toLocaleLowerCase() === value.toLocaleLowerCase())
     )?.[0] || value
   )
 }

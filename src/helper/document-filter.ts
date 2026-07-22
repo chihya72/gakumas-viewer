@@ -16,6 +16,16 @@ export type DocStatus =
   | '已完成'
   | '已存档'
 
+export const STORY_LABELS: Record<StoryKind, string> = {
+  cidol: 'P卡剧情',
+  csprt: 'S卡剧情',
+  dear: '好感度剧情',
+  event: '活动剧情',
+  pstory: '培养故事',
+  pevent: '培养事件',
+  other: '其它剧情',
+}
+
 export function storyKind(title: string): StoryKind {
   return (title
     .match(/(?:^|[_-])(cidol|csprt|dear|event|pstory|pevent)(?:[_-]|$)/i)?.[1]
