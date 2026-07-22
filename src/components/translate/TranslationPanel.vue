@@ -268,13 +268,21 @@ async function onCompleteClick() {
       content,
       `${TRACK_LABEL[role]}完成 ${store.jsonUrl}`
     )
-    await updateWorkRecord(
+    const directProofread = await updateWorkRecord(
       store.octokitWrapper,
       title,
       role,
       me.value,
       outputPath
     )
+    if (directProofread) {
+      await pushContentToWorkPath(
+        store.octokitWrapper,
+        completionPath(path, title, 'tr'),
+        content,
+        `直接校对结果同步为翻译 ${title}`
+      )
+    }
     await applyTrack(store.octokitWrapper, issueNumber.value, role, {
       user: me.value,
       state: '完成',

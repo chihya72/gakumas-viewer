@@ -195,7 +195,9 @@ export async function aiCompleteTranslation(
     doc.translatedPath.replace(/^translated_csv\//, '').replace(/\.csv$/, '').split('/').join('_'),
     'tr',
     me,
-    doc.translatedPath
+    doc.translatedPath,
+    '完成',
+    true
   )
   const body = setTrackInBody(issue.body, 'tr', {
     user: me,
@@ -457,8 +459,9 @@ export async function updateWorkRecord(
   role: TrackKey,
   operatorGithub: string,
   artifactPath = '',
-  state: TrackState = '完成'
-) {
+  state: TrackState = '完成',
+  directMachine = false
+): Promise<boolean> {
   const recordPath = `records/${fileId}.json`
   let operatorQq = ''
   let operatorId = operatorGithub
@@ -503,6 +506,7 @@ export async function updateWorkRecord(
   } catch (error: any) {
     if (error?.response?.status !== 404) throw error
   }
+  const directProofread = role === 'pr' && record.direct_machine_proofread === true
   const now = new Date().toISOString()
   const key = role === 'tr' ? 'translation' : 'proofread'
   const artifactKey = role === 'tr' ? 'translation_csv' : 'proofread_csv'
@@ -533,6 +537,25 @@ export async function updateWorkRecord(
       timestamp: now,
     }
   }
+  if (directMachine) record.direct_machine_proofread = true
+  if (directProofread) {
+    record.translation = {
+      ...record.proofread,
+      revision: Math.max(1, Number(record.translation?.revision || 0)),
+      state: '完成',
+    }
+    if (record.artifacts?.translation_csv) {
+      record.artifacts.translation_csv = {
+        ...record.artifacts.translation_csv,
+        operator_qq: record.translation.operator_qq,
+        operator_github: record.translation.operator_github,
+        display_id: record.translation.display_id,
+        display_source: record.translation.display_source,
+        timestamp: record.translation.timestamp,
+      }
+    }
+    delete record.direct_machine_proofread
+  }
   record.github = { ...(record.github || {}), updated_at: now }
   await wrapper.updateContent(
     WORK_OWNER,
@@ -542,6 +565,7 @@ export async function updateWorkRecord(
     `${TRACK_LABEL[role]}${state}记录 ${fileId}`,
     utf8ToBase64(JSON.stringify(record, null, 2) + '\n')
   )
+  return directProofread
 }
 
 export function validateRowsHtmlTags(
