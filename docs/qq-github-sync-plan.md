@@ -47,7 +47,27 @@ SSH 用户：pm
 4. SSH 密码、GitHub Token、OAuth Secret 只放 NAS 的环境变量或密钥文件，不写入本规划、Git 仓库或日志。
 5. 上线前先在 NAS 复制两个插件目录和 `resources`，完成离线迁移演练，再切换正式轮询。
 
-### 当前实施进度（2026-07-22）
+### 当前实施进度（2026-07-22，最近核对）
+
+当前 GitHub 工作仓库 HEAD：`7d4859944c8475a70edfc452a3544c2d48ca4fbf`
+
+| 项目 | 当前数量/状态 |
+| --- | --- |
+| GitHub Issue | 332 个（开放 60，关闭 272） |
+| 已存档 Issue | 57 个（`closed` + `已存档` 标签） |
+| `records/*.json` | 325 个 |
+| 原文 TXT | 248 个 |
+| 机翻 CSV | 110 个 |
+| 翻译 CSV | 175 个 |
+| 校对 CSV | 222 个 |
+| 翻译/校对草稿 | 目前均为 0 个 |
+| 翻译/校对备份 | 目前均为 0 个 |
+| Bot 记录同步 | 325 个，HEAD 已追平 |
+| Bot 文件镜像 | `artifact_sync_complete=false`，仍未完全同步 |
+
+记录状态统计：翻译完成 265、进行中 6、待认领 54；校对完成 222、进行中 13、待认领 90。
+
+当前 GitHub 中有 7 个历史“重复归档”Issue 没有对应 JSON 记录；它们属于重复工单，不应重新生成业务记录。
 
 - [x] 阶段 0：完成本地源码核对，并备份 CSV 插件的 `__init__.py`、`config.py`、`registered_users.csv`。
 - [x] 阶段 1：已增加 `work_protocol.py`、`resources/records/` 原子 JSON 记录层，并完成现有 `compare_status.csv` 记录迁移。
@@ -55,16 +75,16 @@ SSH 用户：pm
 - [x] 身份对齐：已按完全匹配结果关联 5 个 GitHub login 与 QQ 号；记录保存 QQ 号，QQ 端显示群内 ID，网页端显示 GitHub ID。其余账号等待明确 QQ 映射，不按昵称猜测。
 - [x] 阶段 2：已加入 `github_exchange.py` 只读镜像、HEAD/ETag 游标和“同步工作仓库”命令；公网仓库无需 Token 即可读取。
 - [x] 阶段 2：已部署到 NAS，依据 NAS 自有数据生成 1450 条记录；`nonebot` 容器重启后成功加载插件。
-- [x] 阶段 2：已从 GitHub 工作仓库同步 `index.json`、`users.json`、100 条 Issue 状态和 34 个已完成 CSV 到 `resources/github-work/`。
+- [x] 阶段 2：已从 GitHub 工作仓库同步 `index.json`、`users.json`、Issue 状态和 JSON 记录到 `resources/github-work/`；当前记录数量已追平至 325。
 - [x] 阶段 2：匿名 API 达到限流后自动降级到 raw 文件 ETag；重复 HEAD 不重新下载，当前 NAS 实测第二次同步返回 `changed=false`。
 - [x] 远程代码备份：`nonebot_plugin_gakuen_csv_sync/deploy_backups/phase2d-20260722-012807`。
 - [x] 阶段 3：已加入 Git Data API 多文件提交器（文件 + `records/<file_id>.json`）和 CAS 分支冲突检测；NAS 已配置 Token 并开启写回。
 - [x] 阶段 3：QQ 上传在写回开关关闭时保持原有本地流程；开启后会尝试同步到 GitHub，并明确报告写回失败。
 - [x] 阶段 3 远程备份：`nonebot_plugin_gakuen_csv_sync/deploy_backups/phase3-20260722-013102`。
-- [x] 阶段 3：已从 GitHub Issue 状态生成并提交 100 个 `records/<file_id>.json`；NoneBot 已按 JSON 语义对账并投影到本地记录。
+- [x] 阶段 3：已从 GitHub Issue 状态生成并提交 `records/<file_id>.json`；NoneBot 已按 JSON 语义对账并投影到本地记录。
 - [x] 阶段 3：QQ 正式上传会在同一 Git 提交写入成品与记录 JSON，并更新 Issue 工序、操作者和 assignee。
-- [x] 阶段 3：GitHub 已完成文件已投影为 Bot 可直接读取的路径；覆盖前只保留最新一份镜像备份。
-- [x] 阶段 3：网页认领、直接上传、编辑器完成和 AI 完成路径会同步更新对应 `records/<file_id>.json`；有映射时保存 QQ 号，显示仍使用 GitHub ID。
+- [~] 阶段 3：GitHub 已完成文件可以投影为 Bot 可读取路径；当前镜像仍报告 `artifact_sync_complete=false`，需要补齐失败文件后才能算完全交付。
+- [x] 阶段 3：网页认领、直接上传、编辑器完成和 AI 完成路径会同步更新对应 `records/<file_id>.json`；身份字段和个人 ID 展示规则已统一。
 - [x] 阶段 3：NAS 已再次重启验证，两个插件正常加载；HEAD `8155a8e4b3dfe3686441bada91a20b38e79861e7` 重复同步返回 `changed=false`。
 - [x] 上传优先：QQ 与 GitHub 身份先按 `users.json` 归一化；同一人可直接提交，不同人上传先暂存，回复“确认覆盖”后才替换正式稿，回复“取消覆盖”则删除暂存稿。
 - [x] 动态通知：Bot 每 60 秒轮询工作仓库；网页认领、翻译完成或校对完成会推送到既有 QQ 上传通知目标。
@@ -73,13 +93,17 @@ SSH 用户：pm
 - [x] 镜像一致性：records 与成品按不可变 Git 提交 SHA 下载，避免 `raw.githubusercontent.com/main` 分支缓存返回旧内容。
 - [x] 网页刷新优化：普通读取恢复缓存、首次用户/Issue 请求并行、历史提交时间改为不阻塞首屏、页面激活增加 30 秒防重复刷新；已推送并通过 GitHub Pages 部署。
 - [x] 六类统一：网页和 Bot 均支持 `cidol`、`csprt`、`dear`、`event`、`pstory`、`pevent`；QQ 命令使用“培养事件”，并兼容误拼 `pevnet`。
-- [x] 工作项对账：补齐当前 `index.json` 中遗漏的 10 个 `pstory` Issue 和记录；GitHub 当前为 110 个 Issue、110 份 JSON 记录，Bot 镜像数量一致。
+- [x] 工作项对账：已补齐历史遗漏的 `pstory` Issue 和记录；当前 GitHub Issue 数量已扩展到 332，记录 JSON 为 325，另有 7 个重复归档 Issue 不对应业务记录。
 - [x] `pevent` 首次同步：Bot 已写入 1101 个文件；上游六类清单为 `cidol 318 / csprt 493 / dear 455 / event 136 / pstory 608 / pevent 1101`。
 - [x] CSV 同步提速：单类文件同步改为 8 路有限并发，`pevent` 首次全量同步实测约 107 秒完成。
 - [x] QQ 认领联动：`翻译占坑`、`校对占坑` 同时更新 GitHub Issue 与 `records/<file_id>.json`；翻译认领优先发送 `ai_csv` 机翻稿，无机翻时回退原文 CSV。
 - [x] 单端身份兼容：`users.json` 以必填且唯一的个人 ID 为键，GitHub ID 与 QQ 号至少填写一项；不再把 `qq-<QQ号>` 伪装成 GitHub ID。
 - [x] 历史回填：`adv_dear_hski_037` 的校对稿已按 QQ `948279048` / “煉金術式”补写 Issue、JSON 记录、`users.json` 与校对 CSV。
-- [ ] 阶段 4 以后：实现草稿恢复、版本冲突、正式稿原子轮换和 GitHub 暂时不可用时的 outbox 重试。
+- [x] 网页时间显示：工作台和已完成历史已补充原文、翻译、校对提交时间，并修复登录异步刷新时丢失时间的问题。
+- [ ] 阶段 4：实现翻译/校对草稿保存、恢复和过期草稿提示；当前草稿目录和网页“中途保存”尚未实现。
+- [ ] 阶段 5：实现 `base_revision` CAS、正式稿/备份/草稿一次 Git 提交和校对 TXT 原子更新；当前只有简单 `revision` 计数。
+- [ ] 阶段 6：补齐 Bot 文件镜像失败重试、本地 outbox 和完整 reconcile；当前记录已同步，但 `artifact_sync_complete=false`。
+- [ ] 阶段 7：清理旧流程，统一让 Issue 和 CSV 成为记录 JSON 的投影视图，并完成全量验收测试。
 
 ## 4. 推荐整体架构
 
@@ -440,7 +464,7 @@ GitHub 官方文档说明，Contents API 的并发文件操作需要串行处理
 
 交付：旧数据可以转换，新记录可以读写。
 
-### 阶段 2：Bot 只读同步
+### 阶段 2：Bot 只读同步（基本完成，文件镜像仍有缺口）
 
 - 先在 `nonebot_plugin_gakuen_csv_sync` 部署只读同步，观察一个完整轮询周期。
 - 保持 `nonebot_plugin_hatsuboshi_resource_sync` 原文资源同步不变，确认两者不会争用同一文件。
@@ -450,7 +474,7 @@ GitHub 官方文档说明，Contents API 的并发文件操作需要串行处理
 
 交付：网页提交后，Bot 可以恢复本地工作区。
 
-### 阶段 3：QQ 上传写回 GitHub
+### 阶段 3：QQ 上传写回 GitHub（基本完成，原子版本协议待补齐）
 
 - 接入 QQ 文件校验。
 - 接入认领人校验和 `base_revision`。
@@ -459,7 +483,7 @@ GitHub 官方文档说明，Contents API 的并发文件操作需要串行处理
 
 交付：QQ 提交可以出现在网页端。
 
-### 阶段 4：网页中途保存
+### 阶段 4：网页中途保存（未完成）
 
 - 增加“中途保存”。
 - 编辑器恢复有效草稿。
@@ -467,7 +491,7 @@ GitHub 官方文档说明，Contents API 的并发文件操作需要串行处理
 
 交付：网页可断点续作，不覆盖正式稿。
 
-### 阶段 5：网页确认完成
+### 阶段 5：网页确认完成（部分完成）
 
 - 完成按钮接入 CAS 版本校验。
 - 原子轮换备份、正式稿和记录。
@@ -475,7 +499,7 @@ GitHub 官方文档说明，Contents API 的并发文件操作需要串行处理
 
 交付：网页完成可以被 Bot 自动拉取。
 
-### 阶段 6：双端 reconcile 和通知
+### 阶段 6：双端 reconcile 和通知（部分完成）
 
 - Git HEAD 轮询。
 - 重复事件按哈希幂等处理。
@@ -484,7 +508,7 @@ GitHub 官方文档说明，Contents API 的并发文件操作需要串行处理
 
 交付：两端重启、重复轮询、短暂断网后都能恢复一致。
 
-### 阶段 7：清理旧流程
+### 阶段 7：清理旧流程（未开始）
 
 - 移除网页直接覆盖来源文件的逻辑。
 - 移除共享脏位设计。
@@ -522,3 +546,12 @@ GitHub 官方文档说明，Contents API 的并发文件操作需要串行处理
 - 旧稿不能覆盖新稿，冲突必须显式提示。
 - `compare_status.csv` 不再是唯一真源。
 - OAuth Secret、Bot Token 和 QQ 映射没有暴露在前端公开资源中。
+
+## 19. 按当前状态安排的后续顺序
+
+1. **先完成文件镜像**：根据 `artifact_sync_complete=false` 的失败清单补齐 Bot 的机翻、翻译和校对文件，确认 NAS 与 GitHub 的文件 SHA 一致。
+2. **实现草稿层**：增加 `translated_draft`、`proofread_draft`，网页提供“中途保存”，编辑器按操作者和基准版本恢复有效草稿。
+3. **实现版本冲突保护**：为网页和 QQ 提交统一加入 `base_revision` 校验；旧版本只能保存为冲突草稿，不能覆盖正式稿。
+4. **实现正式稿原子轮换**：一次 Git 提交完成正式稿、最新备份、草稿清理、记录和校对 TXT 更新。
+5. **补齐 outbox 与重试**：GitHub 暂时不可用时保留本地待同步任务，恢复后按 commit/哈希幂等重试。
+6. **清理旧投影流程并验收**：确认 Issue、`compare_status.csv` 和本地记录都从 JSON/HEAD 重建，完成并发、断网、重启、非法 CSV 和身份权限测试。
