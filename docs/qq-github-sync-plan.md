@@ -59,7 +59,7 @@ SSH 用户：pm
 
 ### 当前实施进度（2026-07-22，最近核对）
 
-当前 GitHub 工作仓库 HEAD：`9dae7b98eceeb78ebff0999d9efd8ca40ca86f93`
+当前 GitHub 工作仓库 HEAD：`94958fda50fc713139fbed93a40158116c745d51`
 
 | 项目 | 当前数量/状态 |
 | --- | --- |
@@ -67,14 +67,14 @@ SSH 用户：pm
 | 已存档 Issue | 43 个（`closed` + `已存档` 标签） |
 | `records/*.json` | 325 个 |
 | 原文 TXT | 248 个 |
-| 机翻 CSV | 132 个 |
-| 翻译 CSV | 329 个 |
-| 校对 CSV | 272 个 |
+| 机翻 CSV | 110 个 |
+| 翻译 CSV | 267 个 |
+| 校对 CSV | 222 个 |
 | 翻译/校对草稿 | 目前均为 0 个 |
 | 翻译/校对备份 | 目前均为 0 个 |
 | `source_times.json` | 尚未生成，需在管理页点一次“更新入库时间清单” |
-| Bot 记录同步 | 325 个，HEAD 已追平 |
-| Bot 文件镜像 | `artifact_sync_complete=false`，仍未完全同步 |
+| Bot 记录同步 | 325 个，指纹与 GitHub 相同，HEAD 已追平 |
+| Bot 文件镜像 | `artifact_sync_complete=true`，847 个产物已追平 |
 
 记录状态统计：翻译完成 265、校对完成 222、至少一轨有人认领 271。
 
@@ -94,7 +94,7 @@ Issue 数量从 332 回到 325：7 个历史“重复归档”工单为同一批
 - [x] 阶段 3 远程备份：`nonebot_plugin_gakuen_csv_sync/deploy_backups/phase3-20260722-013102`。
 - [x] 阶段 3：已从 GitHub Issue 状态生成并提交 `records/<file_id>.json`；NoneBot 已按 JSON 语义对账并投影到本地记录。
 - [x] 阶段 3：QQ 正式上传会在同一 Git 提交写入成品与记录 JSON，并更新 Issue 工序、操作者和 assignee。
-- [~] 阶段 3：GitHub 已完成文件可以投影为 Bot 可读取路径；当前镜像仍报告 `artifact_sync_complete=false`，需要补齐失败文件后才能算完全交付。
+- [x] 阶段 3：GitHub 已完成文件已投影为 Bot 可读取路径；`artifact_sync_complete` 已为 `true`，847 个产物全部追平。
 - [x] 阶段 3：网页认领、直接上传、编辑器完成和 AI 完成路径会同步更新对应 `records/<file_id>.json`；身份字段和个人 ID 展示规则已统一。
 - [x] 阶段 3：NAS 已再次重启验证，两个插件正常加载；HEAD `8155a8e4b3dfe3686441bada91a20b38e79861e7` 重复同步返回 `changed=false`。
 - [x] 上传优先：QQ 与 GitHub 身份先按 `users.json` 归一化；同一人可直接提交，不同人上传先暂存，回复“确认覆盖”后才替换正式稿，回复“取消覆盖”则删除暂存稿。
@@ -130,7 +130,7 @@ Issue 数量从 332 回到 325：7 个历史“重复归档”工单为同一批
 - [x] 一次性导入遗留：10 条 `adv_pstory_001_kllj_*` 的 `resources/csv/` 路径来自 07-21 的历史导入而非 Bot 常规写入路径（同日 QQ 侧写入的路径均正确），已清理；若再次运行该导入脚本需先修其回退分支。
 - [ ] 阶段 4：实现翻译/校对草稿保存、恢复和过期草稿提示；当前草稿目录和网页“中途保存”尚未实现。
 - [ ] 阶段 5：在已有多文件提交器之上接入 `base_revision` CAS、正式稿/备份/草稿原子轮换和校对 TXT 更新；当前只有简单 `revision` 计数，网页完成仍走单文件 Contents API。
-- [ ] 阶段 6：补齐 Bot 文件镜像失败重试、本地 outbox 和完整 reconcile；当前记录已同步，但 `artifact_sync_complete=false`。
+- [ ] 阶段 6：补齐 Bot 文件镜像失败重试和本地 outbox；记录与产物当前均已追平，但失败重试与断网恢复路径尚未验证。
 - [ ] 阶段 7：清理旧流程，统一让 Issue 和 CSV 成为记录 JSON 的投影视图，并完成全量验收测试。
 
 ## 4. 推荐整体架构
