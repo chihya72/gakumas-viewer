@@ -390,19 +390,29 @@ export function parseTrack(
   return { user, state: STATES.includes(state) ? state : '待认领' }
 }
 
+// 个人 ID / GitHub login / qq-<号> 都能查到同一个人。
+// 空值必须早退：只填 QQ 的成员 github 为空，否则 '' === '' 会把无人认领认成他。
+export function findWorkUser(
+  value: string
+): [string, { github?: string; qq?: string }] | undefined {
+  const v = (value || '').trim()
+  if (!v) return undefined
+  const qq = v.startsWith('qq-') ? v.slice(3) : ''
+  return Object.entries(workUsers).find(
+    ([id, item]) =>
+      id === v ||
+      (!!qq && item.qq === qq) ||
+      (!!item.github && item.github.toLocaleLowerCase() === v.toLocaleLowerCase())
+  )
+}
+
 // 把某轨道写回 body（有则替换，无则追加）
 export function setTrackInBody(
   body: string | null | undefined,
   key: TrackKey,
   t: Track
 ): string {
-  const user =
-    Object.entries(workUsers).find(
-      ([id, item]) =>
-        id === t.user ||
-        item.github?.toLocaleLowerCase() === t.user.toLocaleLowerCase() ||
-        (t.user.startsWith('qq-') && item.qq === t.user.slice(3))
-    )?.[0] || t.user
+  const user = findWorkUser(t.user)?.[0] || t.user
   const marker = `<!-- ${key}:${user}:${t.state} -->`
   const re = markerRe(key)
   const b = body || ''
@@ -487,14 +497,11 @@ export function assigneesOf(tr: Track, pr: Track): string[] {
       [tr.user, pr.user]
         .map((operator) => {
           const value = operator.trim()
-          const qq = value.startsWith('qq-') ? value.slice(3) : ''
-          const found = Object.entries(workUsers).find(
-            ([id, user]) =>
-              id === value ||
-              (!!qq && user.qq === qq) ||
-              user.github?.toLocaleLowerCase() === value.toLocaleLowerCase()
+          if (!value) return ''
+          const found = findWorkUser(value)
+          return (
+            found?.[1].github || (!Object.keys(workUsers).length ? value : '')
           )
-          return found?.[1].github || (!Object.keys(workUsers).length ? value : '')
         })
         .filter(Boolean)
     ),
