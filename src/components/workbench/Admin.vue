@@ -167,11 +167,13 @@
           </n-button>
         </div>
       </div>
+      <p class="sort-hint">
+        按原文入库日分页，新的在前；页内按文件名排序。勾选框作用于当前筛选的全部文件，不限本页。
+      </p>
       <doc-filters
-        v-slot="{ rows: filteredRows }"
+        v-slot="{ rows: filteredRows, allRows }"
         :docs="docs"
         :archived-numbers="archived"
-        :paged="false"
       >
         <div v-if="filteredRows.length" class="table-scroll">
           <table class="grid docs">
@@ -179,10 +181,11 @@
               <tr>
                 <th class="pick-col">
                   <n-checkbox
-                    :checked="areAllSelectableSelected(filteredRows)"
-                    @update:checked="(v: boolean) => toggleAll(v, filteredRows)"
+                    :checked="areAllSelectableSelected(allRows)"
+                    @update:checked="(v: boolean) => toggleAll(v, allRows)"
                   />
                 </th>
+                <th>入库</th>
                 <th>剧情</th>
                 <th>译者</th>
                 <th>翻译状态</th>
@@ -199,6 +202,9 @@
                     :disabled="isArchived(d)"
                     @update:checked="(v: boolean) => toggleSelected(d.number, v)"
                   />
+                </td>
+                <td class="source-time">
+                  {{ formatGmt8(d.sourceCommitTime || '') }}
                 </td>
                 <td class="title">{{ d.title }}</td>
                 <td>
@@ -303,6 +309,8 @@ import {
   archiveIssue,
   createWorkIssue,
   docFromIssue,
+  fillDocSourceCommitTimes,
+  formatGmt8,
   isArchivedIssue,
   pushContentToWorkPath,
   restoreIssue,
@@ -420,13 +428,17 @@ async function refresh() {
     ])
     syncUserRows()
     const nextArchived = new Set<number>()
-    docs.value = (issues as any[])
+    const loaded = (issues as any[])
       .filter((i) => !i.pull_request)
       .map((i) => {
         if (isArchivedIssue(i)) nextArchived.add(i.number)
         return docFromIssue(i)
       })
-      .sort((a, b) => a.title.localeCompare(b.title))
+    // 入库时间来自 source_times.json，一个请求灌满缓存；分页与「入库」列都靠它。
+    // 填充函数会按时间重排，这里再按文件名排回来——页内按名字看着才顺。
+    docs.value = (
+      await fillDocSourceCommitTimes(store.octokitWrapper, loaded)
+    ).sort((a, b) => a.title.localeCompare(b.title))
     archived.value = nextArchived
     selected.value = new Set()
     lastRefreshAt = Date.now()
@@ -633,7 +645,8 @@ onMounted(() => {
   if (store.octokitWrapper?.userMeta) refresh()
 })
 onActivated(() => {
-  if (store.octokitWrapper?.userMeta && Date.now() - lastRefreshAt > 30_000) refresh()
+  if (store.octokitWrapper?.userMeta && Date.now() - lastRefreshAt > 30_000)
+    refresh()
 })
 </script>
 
@@ -785,6 +798,16 @@ h3 {
 .title {
   word-break: break-all;
   font-weight: 600;
+}
+.sort-hint {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+.source-time {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 @media (max-width: 720px) {
