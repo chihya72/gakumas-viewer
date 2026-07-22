@@ -154,14 +154,15 @@ export async function docSourceCommitTime(
   const hit = readTimeCache()[key]
   if (hit) return hit
   const [owner, repo] = CAMPUS_REPO.split('/')
-  const campus = owner && repo
-    ? await firstFileCommitTimeInRepo(
-        wrapper,
-        owner,
-        repo,
-        `Resource/${d.title}.txt`
-      )
-    : ''
+  const campus =
+    owner && repo
+      ? await firstFileCommitTimeInRepo(
+          wrapper,
+          owner,
+          repo,
+          `Resource/${d.title}.txt`
+        )
+      : ''
   const time =
     campus ||
     (await firstFileCommitTimeInRepo(
@@ -348,7 +349,11 @@ export async function aiCompleteTranslation(
   )
   await updateWorkRecord(
     wrapper,
-    doc.translatedPath.replace(/^translated_csv\//, '').replace(/\.csv$/, '').split('/').join('_'),
+    doc.translatedPath
+      .replace(/^translated_csv\//, '')
+      .replace(/\.csv$/, '')
+      .split('/')
+      .join('_'),
     'tr',
     me,
     doc.translatedPath,
@@ -402,7 +407,8 @@ export function findWorkUser(
     ([id, item]) =>
       id === v ||
       (!!qq && item.qq === qq) ||
-      (!!item.github && item.github.toLocaleLowerCase() === v.toLocaleLowerCase())
+      (!!item.github &&
+        item.github.toLocaleLowerCase() === v.toLocaleLowerCase())
   )
 }
 
@@ -415,6 +421,15 @@ export function sameWorkUser(a: string, b: string): boolean {
   if (x.toLocaleLowerCase() === y.toLocaleLowerCase()) return true
   const idA = findWorkUser(x)?.[0]
   return !!idA && idA === findWorkUser(y)?.[0]
+}
+
+// 把任意身份形式折算成该用户的规范鉴权身份：有 GitHub 账号用 login，否则 qq-<号>。
+// 管理页的下拉选项按这个规则取值，加载时归一才能正确回显，而不是把 qq-xxx 裸露出来。
+export function canonicalOperator(value: string): string {
+  const found = findWorkUser(value)
+  if (!found) return (value || '').trim()
+  const [, user] = found
+  return user.github || (user.qq ? `qq-${user.qq}` : '')
 }
 
 // 把某轨道写回 body（有则替换，无则追加）
@@ -641,7 +656,9 @@ function utf8ToBase64(text: string): string {
 
 function base64ToUtf8(value: string): string {
   const bin = atob(String(value || '').replace(/\n/g, ''))
-  return new TextDecoder().decode(Uint8Array.from(bin, (char) => char.charCodeAt(0)))
+  return new TextDecoder().decode(
+    Uint8Array.from(bin, (char) => char.charCodeAt(0))
+  )
 }
 
 // GitHub login → 个人 ID / QQ 号。读的是仓库里的 users.json，不依赖前端已加载的映射
@@ -962,7 +979,9 @@ export function draftInfoOf(
     displayId: meta.display_id || meta.operator_github || '',
     basedOnRevision: Number(meta.based_on_revision || 0),
     timestamp: meta.timestamp || '',
-    stale: Number(meta.based_on_revision || 0) !== Number(record[key]?.revision || 0),
+    stale:
+      Number(meta.based_on_revision || 0) !==
+      Number(record[key]?.revision || 0),
     mine:
       !!meGithub &&
       (meta.operator_github || '').toLocaleLowerCase() ===
@@ -1000,10 +1019,13 @@ export async function completeStage(
   const files: { path: string; content: string | null }[] = []
 
   // 草稿已晋升为正式稿，同一提交里删掉，避免下次打开又恢复出旧内容
-  const draft = record.artifacts?.[role === 'tr' ? 'translation_draft' : 'proofread_draft']
+  const draft =
+    record.artifacts?.[role === 'tr' ? 'translation_draft' : 'proofread_draft']
   if (draft?.path) {
     files.push({ path: draft.path, content: null })
-    delete record.artifacts[role === 'tr' ? 'translation_draft' : 'proofread_draft']
+    delete record.artifacts[
+      role === 'tr' ? 'translation_draft' : 'proofread_draft'
+    ]
     record[key] = { ...(record[key] || {}), draft_revision: 0 }
   }
 
@@ -1088,9 +1110,7 @@ export function validateRowsHtmlTags(
     if (row.id === 'info' || row.id === '译者' || !row.trans) return
     const dst = htmlTags(row.trans)
     if (!htmlTagsAreBalanced(dst)) {
-      errors.push(
-        `第 ${i + 2} 行译文标签无效：[${dst.join(' ')}]`
-      )
+      errors.push(`第 ${i + 2} 行译文标签无效：[${dst.join(' ')}]`)
     }
   })
   return errors

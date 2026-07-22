@@ -1,6 +1,7 @@
 // completeStage 实跑检查：假 wrapper 记录提交了哪些文件，不碰网络。
 // 跑法：npm run check:stage
 import {
+  canonicalOperator,
   completeStage,
   draftInfoOf,
   myStatusOf,
@@ -303,7 +304,7 @@ const check = (name, cond, extra = '') => {
 // 11) 身份归一：轨道存个人 ID，登录态是 GitHub login
 {
   setAssigneeUsers({
-    pm: { github: 'chihya72', qq: '' },
+    pm: { github: 'chihya72', qq: '1072536235' },
     煉金術式: { github: '', qq: '948279048' },
   })
   check('个人 ID 与 login 视为同一人', sameWorkUser('pm', 'chihya72'))
@@ -314,11 +315,35 @@ const check = (name, cond, extra = '') => {
     '空值不匹配任何人',
     !sameWorkUser('', 'chihya72') && !sameWorkUser('pm', '')
   )
+  const pr = { user: '', state: '待认领' as const }
   check('QQ-only 成员按个人 ID 匹配', sameWorkUser('煉金術式', '煉金術式'))
   check('空值不会命中 QQ-only 成员', !sameWorkUser('', '煉金術式'))
 
+  // 跨端打通：QQ 认领的可以在网页继续做，反之亦然
+  check(
+    'QQ 号 ↔ GitHub login 同一人',
+    sameWorkUser('qq-1072536235', 'chihya72')
+  )
+  check('反向也成立', sameWorkUser('chihya72', 'qq-1072536235'))
+  check('别人的 QQ 号不匹配', !sameWorkUser('qq-948279048', 'chihya72'))
+  // 管理页下拉按规范身份取值，任何形式都要能折算过去
+  check('个人 ID → 规范身份', canonicalOperator('pm') === 'chihya72')
+  check('qq-号 → 规范身份', canonicalOperator('qq-1072536235') === 'chihya72')
+  check('login 保持不变', canonicalOperator('chihya72') === 'chihya72')
+  check(
+    'QQ-only 成员规范身份是 qq-号',
+    canonicalOperator('煉金術式') === 'qq-948279048'
+  )
+  check('查无此人时原样返回', canonicalOperator('nobody') === 'nobody')
+  check('空值仍是空', canonicalOperator('') === '')
+
+  const trFromQq = { user: 'qq-1072536235', state: '进行中' as const }
+  check(
+    'QQ 认领的工序在网页可编辑',
+    myStatusOf(trFromQq, pr, 'chihya72').activeRole === 'tr'
+  )
+
   const tr = { user: 'pm', state: '进行中' as const }
-  const pr = { user: '', state: '待认领' as const }
   check(
     '我的进行中轨道可编辑',
     myStatusOf(tr, pr, 'chihya72').activeRole === 'tr'

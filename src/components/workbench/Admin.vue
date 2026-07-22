@@ -307,6 +307,7 @@ import {
   WORK_REPO,
   STATES,
   archiveIssue,
+  canonicalOperator,
   createWorkIssue,
   docFromIssue,
   fillDocSourceCommitTimes,
@@ -432,7 +433,11 @@ async function refresh() {
       .filter((i) => !i.pull_request)
       .map((i) => {
         if (isArchivedIssue(i)) nextArchived.add(i.number)
-        return docFromIssue(i)
+        const d = docFromIssue(i)
+        // 归一到下拉选项用的规范身份，否则 qq-xxx 或历史个人 ID 会原样裸露在下拉里
+        d.tr.user = canonicalOperator(d.tr.user)
+        d.pr.user = canonicalOperator(d.pr.user)
+        return d
       })
     // 入库时间来自 source_times.json，一个请求灌满缓存；分页与「入库」列都靠它。
     // 填充函数会按时间重排，这里再按文件名排回来——页内按名字看着才顺。
