@@ -759,12 +759,16 @@ export async function archiveIssue(wrapper: any, issueNumber: number) {
   })
 }
 
+// 恢复后归位由两轨状态决定：全完成 → 关闭（已完成历史），否则打开（工作台）
 export async function restoreIssue(wrapper: any, issueNumber: number) {
   const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, issueNumber)
   const labels = issueLabelNames(issue).filter((l) => l !== ARCHIVED_LABEL)
+  const done =
+    parseTrack(issue.body, 'tr').state === '完成' &&
+    parseTrack(issue.body, 'pr').state === '完成'
   await wrapper.updateIssue(WORK_OWNER, WORK_REPO, issueNumber, {
     labels,
-    state: 'open',
+    state: done ? 'closed' : 'open',
   })
 }
 
