@@ -418,13 +418,14 @@ export function sameWorkUser(a: string, b: string): boolean {
 }
 
 // 把某轨道写回 body（有则替换，无则追加）
+// 轨道存的是「鉴权身份」，原样写入不做归一：网页写 GitHub login，QQ 端写 qq-<号>。
+// 归一成个人 ID 会抹掉判定依据，让两端都认不出自己的工序；个人 ID 只在显示时折算。
 export function setTrackInBody(
   body: string | null | undefined,
   key: TrackKey,
   t: Track
 ): string {
-  const user = findWorkUser(t.user)?.[0] || t.user
-  const marker = `<!-- ${key}:${user}:${t.state} -->`
+  const marker = `<!-- ${key}:${t.user.trim()}:${t.state} -->`
   const re = markerRe(key)
   const b = body || ''
   if (re.test(b)) return b.replace(re, marker)
