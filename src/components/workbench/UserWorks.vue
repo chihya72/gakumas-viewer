@@ -21,7 +21,8 @@
           @update:value="pick"
         />
         <span v-if="who" class="summary">
-          翻译 {{ trCount }} · 校对 {{ prCount }}
+          已完成：翻译 {{ mine?.tr || 0 }} · 校对 {{ mine?.pr || 0 }} · 共
+          {{ myDocs.length }} 篇（含进行中）
         </span>
       </div>
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
@@ -161,18 +162,15 @@ const userOptions = computed(() =>
 const myDocs = computed(() =>
   who.value ? docs.value.filter((d) => rolesOf(d).length) : []
 )
-const trCount = computed(
-  () => myDocs.value.filter((d) => rolesOf(d).includes('tr')).length
-)
-const prCount = computed(
-  () => myDocs.value.filter((d) => rolesOf(d).includes('pr')).length
-)
+// 工具栏汇总跟排行榜一致，都只数已完成；下面的文件列表仍然含进行中
+const mine = computed(() => ranking.value.find((r) => r.id === who.value))
 
-// 全员排行：统计只用已在内存的 issue 数据，不发任何额外请求
+// 全员排行：只计已完成的轨道，进行中的不算产出；数据全在内存，不发额外请求
 const ranking = computed(() => {
   const counts = new Map<string, { tr: number; pr: number }>()
   for (const d of docs.value)
     for (const key of ['tr', 'pr'] as TrackKey[]) {
+      if (d[key].state !== '完成') continue
       const id = ownerId(d[key].user)
       if (!id) continue
       const row = counts.get(id) || { tr: 0, pr: 0 }
