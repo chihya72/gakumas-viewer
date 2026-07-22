@@ -924,13 +924,51 @@ export async function createWorkIssue(
   return issue
 }
 
+// 改译者时同步成品 CSV 的署名行；文件不存在或内容没变就跳过，不产生空提交
+export async function restampTranslator(
+  wrapper: any,
+  doc: Pick<DocTask, 'title' | 'translatedPath' | 'proofreadPath'>,
+  translator: string
+): Promise<number> {
+  let changed = 0
+  for (const path of [doc.translatedPath, doc.proofreadPath]) {
+    if (!path) continue
+    try {
+      const file = await wrapper.getContent(
+        WORK_OWNER,
+        WORK_REPO,
+        WORK_BRANCH,
+        path,
+        true
+      )
+      const current = (file.content as string).replace(/\n/g, '')
+      const next = stampTranslator(current, translator)
+      if (next === current) continue
+      await wrapper.updateContent(
+        WORK_OWNER,
+        WORK_REPO,
+        WORK_BRANCH,
+        path,
+        `更新译者署名 ${doc.title}`,
+        next
+      )
+      changed += 1
+    } catch {
+      // 该阶段成品还不存在，跳过
+    }
+  }
+  return changed
+}
+
 export async function updateTracks(
   wrapper: any,
   issueNumber: number,
   tr: Track,
-  pr: Track
+  pr: Track,
+  translator = ''
 ) {
   const issue = await wrapper.getIssue(WORK_OWNER, WORK_REPO, issueNumber)
+  const before = parseTrack(issue.body, 'tr').user
   let body = setTrackInBody(issue.body, 'tr', tr)
   body = setTrackInBody(body, 'pr', pr)
   const done = tr.state === '完成' && pr.state === '完成'
@@ -940,6 +978,9 @@ export async function updateTracks(
     assignees: assigneesOf(tr, pr),
     state: archived ? issue.state : done ? 'closed' : 'open',
   })
+  // 译者换人了才回写成品署名行
+  if (translator && tr.user !== before)
+    await restampTranslator(wrapper, docFromIssue(issue), translator)
 }
 
 // 统一的轨道更新：拉最新 body → 改指定轨 → 回写 body + 同步 assignees（两轨全完成则关 issue）

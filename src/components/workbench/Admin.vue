@@ -486,7 +486,13 @@ async function saveDoc(d: DocTask) {
   if (!store.octokitWrapper) return
   busy.value = d.number
   try {
-    await updateTracks(store.octokitWrapper, d.number, d.tr, d.pr)
+    await updateTracks(
+      store.octokitWrapper,
+      d.number,
+      d.tr,
+      d.pr,
+      displayUser(d.tr.user)
+    )
     await refresh()
   } catch (e: any) {
     alert(`保存状态失败：${e?.message || e}`)
@@ -533,7 +539,13 @@ async function batchSave() {
   batchSaving.value = true
   try {
     for (const d of picked)
-      await updateTracks(store.octokitWrapper, d.number, d.tr, d.pr)
+      await updateTracks(
+        store.octokitWrapper,
+        d.number,
+        d.tr,
+        d.pr,
+        displayUser(d.tr.user)
+      )
     await refresh()
   } catch (e: any) {
     alert(`批量保存失败：${e?.message || e}`)
