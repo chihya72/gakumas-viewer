@@ -49,25 +49,26 @@ SSH 用户：pm
 
 ### 当前实施进度（2026-07-22，最近核对）
 
-当前 GitHub 工作仓库 HEAD：`7d4859944c8475a70edfc452a3544c2d48ca4fbf`
+当前 GitHub 工作仓库 HEAD：`9dae7b98eceeb78ebff0999d9efd8ca40ca86f93`
 
 | 项目 | 当前数量/状态 |
 | --- | --- |
-| GitHub Issue | 332 个（开放 60，关闭 272） |
-| 已存档 Issue | 57 个（`closed` + `已存档` 标签） |
+| GitHub Issue | 325 个（开放 66，关闭 259） |
+| 已存档 Issue | 43 个（`closed` + `已存档` 标签） |
 | `records/*.json` | 325 个 |
 | 原文 TXT | 248 个 |
-| 机翻 CSV | 110 个 |
-| 翻译 CSV | 175 个 |
-| 校对 CSV | 222 个 |
+| 机翻 CSV | 132 个 |
+| 翻译 CSV | 329 个 |
+| 校对 CSV | 272 个 |
 | 翻译/校对草稿 | 目前均为 0 个 |
 | 翻译/校对备份 | 目前均为 0 个 |
+| `source_times.json` | 尚未生成，需在管理页点一次“更新入库时间清单” |
 | Bot 记录同步 | 325 个，HEAD 已追平 |
 | Bot 文件镜像 | `artifact_sync_complete=false`，仍未完全同步 |
 
-记录状态统计：翻译完成 265、进行中 6、待认领 54；校对完成 222、进行中 13、待认领 90。
+记录状态统计：翻译完成 265、校对完成 222、至少一轨有人认领 271。
 
-当前 GitHub 中有 7 个历史“重复归档”Issue 没有对应 JSON 记录；它们属于重复工单，不应重新生成业务记录。
+Issue 数量从 332 回到 325：7 个历史“重复归档”工单为同一批次重复创建，与在册工单 body 完全相同，已确认可由维护者删除。
 
 - [x] 阶段 0：完成本地源码核对，并备份 CSV 插件的 `__init__.py`、`config.py`、`registered_users.csv`。
 - [x] 阶段 1：已增加 `work_protocol.py`、`resources/records/` 原子 JSON 记录层，并完成现有 `compare_status.csv` 记录迁移。
@@ -100,8 +101,21 @@ SSH 用户：pm
 - [x] 单端身份兼容：`users.json` 以必填且唯一的个人 ID 为键，GitHub ID 与 QQ 号至少填写一项；不再把 `qq-<QQ号>` 伪装成 GitHub ID。
 - [x] 历史回填：`adv_dear_hski_037` 的校对稿已按 QQ `948279048` / “煉金術式”补写 Issue、JSON 记录、`users.json` 与校对 CSV。
 - [x] 网页时间显示：工作台和已完成历史已补充原文、翻译、校对提交时间，并修复登录异步刷新时丢失时间的问题。
+- [x] 阶段 5 前置：网页端已实现 Git Data API 多文件提交器 `OctokitWrapper.commitFiles`（blob → tree → commit → `force:false` 更新 ref）；422 直接报告分支已被推进，不做盲重试。
+- [x] 历史回填：92 篇“翻译轨标记完成但仓库没有 `translated_csv`”的文件已用一次提交补齐。经 NAS 核对，Bot 本地 `csv/<file_id>.csv` 与 GitHub 校对稿逐字相同、`downloads/` 是无署名的机翻版，确认历史上不存在独立译文，故按校对稿内容补出翻译稿（tree 直接复用校对稿 blob，两份指向同一 Git 对象）。这批文件的“校对改了什么”信息本就不存在。
+- [x] 完成时间口径：翻译/校对时间改为取“文件最后提交”与“记录 `timestamp`”中较早者。两个来源都被批量操作污染——回填出的文件时间偏晚，迁移过的记录时间也偏晚，取较早者才能同时避开。比较按时刻（`Date.parse`）而非字符串，因为有 33 条记录是 `+08:00` 带微秒格式。
+- [x] 请求量优化：commit 时间进 `localStorage` 缓存（入库时间永久有效，完成时间按 issue `updated_at` 版本化）；完成时间只查当前页。已完成页从每次约 645 个请求降到冷缓存约 255、再次打开约 3 个。
+- [x] 入库时间清单：新增 `source_times.json` 机制，读取端一个 raw 请求灌满缓存，写入端为管理页“更新入库时间清单”按钮；清单缺失或缺项时自动回退逐个查。
+- [x] 网页分页：工作台、已完成、存档、个人记录按原文入库日分页（上一页/下一页 + `?d=` URL 页码）；管理页无入库时间数据且需要全量批量操作，明确不分页。批量操作使用筛选后全集而非当前页。
+- [x] 个人记录页：新增 `/member`，按个人 ID 索引某人做过的全部文件，并给出全员统计（各成员完成量堆叠条、总量概览）。统计只计 `state === '完成'` 的轨道，工作台在途的不计入。
+- [x] 译者署名行：完成翻译、完成校对、直接上传、AI 一键完成翻译时都会把成品 CSV 末行 `译者` 写成当前译者的个人 ID；管理页改译者时回写该文件的翻译稿与校对稿。校对完成沿用现有译者，不改成校对者。
+- [x] 存档恢复归位：`restoreIssue` 按两轨状态决定 open/closed，两轨完成的恢复后进入已完成历史而不是工作台；4 个此前错位的工单已修正。
+- [x] 数据修正：4 篇 `pevent` 的翻译轨由旧版“AI 署名”写成 `deepseek-v4-pro`，已按现行规则改回校对者 `klsddd`/`mk2`（Issue、CSV 署名行同步）。
+- [x] 数据修正：10 篇 `adv_pstory_001_kllj_*` 的 Issue `proofread_path` 与记录 `artifacts.proofread_csv.path` 写成了 Bot 本地路径 `resources/csv/<file_id>.csv`，已改为仓库路径。此前若有人在这些工单点“校对完成”，成品会被写进仓库根下不存在的 `resources/csv/` 目录。
+- [x] 代码修正：`displayUser` 传空值时会匹配上第一个 `github` 为空的成员（只填 QQ 的用户），把“无人认领”错认成该人；已加空值早退。记录 `category` 取 `artifactPath.split('/')[1]` 恒为 `adv`，已改为按 `file_id` 解析剧情类型（存量 110 条为旧的错值）。
+- [ ] Bot 侧待修（NAS）：生成记录时把本地 `resources/csv/` 当成校对稿路径，仓库路径映射漏了一处；同批记录的时间戳使用 `+08:00` 带微秒格式，与其余 UTC `Z` 不一致。数据已清理，但不改代码会重现。
 - [ ] 阶段 4：实现翻译/校对草稿保存、恢复和过期草稿提示；当前草稿目录和网页“中途保存”尚未实现。
-- [ ] 阶段 5：实现 `base_revision` CAS、正式稿/备份/草稿一次 Git 提交和校对 TXT 原子更新；当前只有简单 `revision` 计数。
+- [ ] 阶段 5：在已有多文件提交器之上接入 `base_revision` CAS、正式稿/备份/草稿原子轮换和校对 TXT 更新；当前只有简单 `revision` 计数，网页完成仍走单文件 Contents API。
 - [ ] 阶段 6：补齐 Bot 文件镜像失败重试、本地 outbox 和完整 reconcile；当前记录已同步，但 `artifact_sync_complete=false`。
 - [ ] 阶段 7：清理旧流程，统一让 Issue 和 CSV 成为记录 JSON 的投影视图，并完成全量验收测试。
 
@@ -398,13 +412,13 @@ GitHub 官方文档说明，Contents API 的并发文件操作需要串行处理
 ### 网页项目
 
 - `src/helper/auth.ts`
-  - 增加多文件 Git 提交。
-  - 删除“取新 SHA 后盲重试旧内容”的逻辑。
-  - 处理明确的 409 冲突。
+  - [x] `commitFiles`：多文件 Git 提交（blob → tree → commit → `force:false` 更新 ref），422 视为分支冲突并明确报错。
+  - [ ] `updateContent` 仍保留“取新 SHA 后重试”的单文件路径，等完成事务改走 `commitFiles` 后再删。
 - `src/helper/workflow.ts`
-  - 增加文件布局、记录解析、版本校验和完成事务。
+  - [x] 文件布局、记录读写、署名行改写、入库时间清单、完成时间口径。
+  - [ ] 版本校验（`base_revision`）和完成事务。
 - `src/helper/users.ts`
-  - `WorkUser` 增加 QQ 映射。
+  - [x] `WorkUser` 增加 QQ 映射；`displayUser` 空值不再误匹配。
 - `src/components/translate/TranslationPanel.vue`
   - 增加“中途保存”。
   - 完成按钮改为统一事务。
