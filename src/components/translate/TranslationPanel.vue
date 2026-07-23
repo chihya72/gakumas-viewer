@@ -491,10 +491,10 @@ function handleFileChange(e: Event) {
     const file = files[0]
     if (communication.value !== null) {
       csvUrl.value = ''
-      router.replace({
-        path: route.path,
-        hash: '',
-      })
+      // 编辑工单时（带 issue + 源路径）用本地文件替换内容：保留 query(issue/role) 与
+      // hash(源路径)，否则会丢掉工单上下文，点完成就退化成下载/提示「未认领」。
+      // 只有独立查看任意 CSV 时才清掉上下文。
+      if (!isWorkFile.value) router.replace({ path: route.path, hash: '' })
       communication.value?.loadDataFromSourceInput(file, null)
     }
   }
