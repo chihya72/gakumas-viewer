@@ -11,18 +11,14 @@
         >
       </div>
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
-      <doc-filters
-        v-slot="{ rows: filteredRows, allRows }"
-        :docs="rows"
-        @page="onPage"
-      >
-        <div v-if="allRows.length" class="batchbar">
+      <doc-filters v-slot="{ rows: filteredRows }" :docs="rows" @page="onPage">
+        <div v-if="filteredRows.length" class="batchbar">
           <n-checkbox
-            :checked="allSelected(allRows)"
-            :indeterminate="someSelected(allRows)"
-            @update:checked="toggleAll(allRows)"
+            :checked="allSelected(filteredRows)"
+            :indeterminate="someSelected(filteredRows)"
+            @update:checked="toggleAll(filteredRows)"
           >
-            全选
+            全选本页
           </n-checkbox>
           <span class="sel-count">已选 {{ selectedCount }}</span>
           <n-button
@@ -139,7 +135,7 @@ function allSelected(list: DocTask[]) {
 function someSelected(list: DocTask[]) {
   return list.some((d) => selected.value.has(d.number)) && !allSelected(list)
 }
-// 全选/取消作用于筛选后的全集（allRows），不被翻页缩到当前页
+// 全选/取消只作用于当前页；翻页时 onPage 会清空勾选，所以 selected 始终只含本页
 function toggleAll(list: DocTask[]) {
   const s = new Set(selected.value)
   const all = allSelected(list)
@@ -186,6 +182,8 @@ async function refresh() {
 
 // 只给当前页没查过的行补翻译/校对完成时间；缓存命中的不重复请求
 async function onPage(pageRows: DocTask[]) {
+  // 翻页即清空勾选：只计算当前页，不跨页累积
+  selected.value = new Set()
   if (!store.octokitWrapper) return
   const pending = pageRows.filter((d) => d.trCsvTime === undefined)
   if (!pending.length) return
