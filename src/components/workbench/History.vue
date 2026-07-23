@@ -11,8 +11,51 @@
         >
       </div>
       <n-alert v-if="error" type="error" :bordered="false">{{ error }}</n-alert>
-      <doc-filters v-slot="{ rows: filteredRows }" :docs="rows" @page="onPage">
+      <doc-filters
+        v-slot="{ rows: filteredRows, allRows }"
+        :docs="rows"
+        @page="onPage"
+      >
+        <div v-if="allRows.length" class="batchbar">
+          <n-checkbox
+            :checked="allSelected(allRows)"
+            :indeterminate="someSelected(allRows)"
+            @update:checked="toggleAll(allRows)"
+          >
+            全选
+          </n-checkbox>
+          <span class="sel-count">已选 {{ selectedCount }}</span>
+          <n-button
+            size="small"
+            :disabled="!selectedCount"
+            :loading="batching"
+            @click="batchDownload('csv')"
+          >
+            批量下载CSV
+          </n-button>
+          <n-button
+            size="small"
+            :disabled="!selectedCount"
+            :loading="batching"
+            @click="batchDownload('txt')"
+          >
+            批量下载TXT
+          </n-button>
+          <n-button
+            v-if="selectedCount"
+            size="small"
+            quaternary
+            @click="clearSel"
+          >
+            清空
+          </n-button>
+        </div>
         <div v-for="d in filteredRows" :key="d.number" class="row">
+          <n-checkbox
+            class="rowcheck"
+            :checked="selected.has(d.number)"
+            @update:checked="() => toggle(d.number)"
+          />
           <span class="source-time">{{
             formatGmt8(d.sourceCommitTime || '')
           }}</span>
@@ -50,9 +93,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onActivated, onMounted, watch } from 'vue'
+import { computed, ref, onActivated, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NEmpty, NAlert } from 'naive-ui'
+import { NButton, NCheckbox, NEmpty, NAlert } from 'naive-ui'
 import FileSaver from 'file-saver'
 import PushHeader from '../translate/push/PushHeader.vue'
 import DocFilters from './DocFilters.vue'
@@ -80,7 +123,32 @@ const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 const rows = ref<DocTask[]>([])
+const selected = ref<Set<number>>(new Set())
+const batching = ref(false)
 let lastRefreshAt = 0
+
+const selectedCount = computed(() => selected.value.size)
+function toggle(n: number) {
+  const s = new Set(selected.value)
+  s.has(n) ? s.delete(n) : s.add(n)
+  selected.value = s
+}
+function allSelected(list: DocTask[]) {
+  return list.length > 0 && list.every((d) => selected.value.has(d.number))
+}
+function someSelected(list: DocTask[]) {
+  return list.some((d) => selected.value.has(d.number)) && !allSelected(list)
+}
+// 全选/取消作用于筛选后的全集（allRows），不被翻页缩到当前页
+function toggleAll(list: DocTask[]) {
+  const s = new Set(selected.value)
+  const all = allSelected(list)
+  list.forEach((d) => (all ? s.delete(d.number) : s.add(d.number)))
+  selected.value = s
+}
+function clearSel() {
+  selected.value = new Set()
+}
 
 // 重新修改：打开已完成阶段文件；再次完成会把对应作者更新为当前用户。
 function openEditor(d: DocTask, role: TrackKey) {
@@ -126,39 +194,79 @@ async function onPage(pageRows: DocTask[]) {
   rows.value = rows.value.map((d) => byNumber.get(d.number) || d)
 }
 
-async function downloadCsv(d: DocTask) {
-  // API 直读而非 raw：raw 无视查询串，刚完成的文件会下到上一版
+// 取校对 CSV 成品的 blob（API 直读而非 raw：raw 无视查询串，刚完成的文件会下到上一版）
+async function csvBlob(d: DocTask): Promise<{ blob: Blob; name: string } | null> {
   const text = await readWorkFile(store.octokitWrapper, d.proofreadPath)
-  if (text === null) {
-    alert('校对CSV下载失败：文件不存在或无权限')
-    return
+  if (text === null) return null
+  return {
+    blob: new Blob([text], { type: 'text/csv;charset=utf-8' }),
+    name: `${d.title}_校对.csv`,
   }
-  FileSaver.saveAs(
-    new Blob([text], { type: 'text/csv;charset=utf-8' }),
-    `${d.title}_校对.csv`
-  )
 }
 
-async function downloadChineseTxt(d: DocTask) {
+// 由原文 TXT + 校对 CSV + 人名字典合成纯中文 TXT 的 blob
+async function txtBlob(d: DocTask): Promise<{ blob: Blob; name: string } | null> {
   const [rawTxt, csvText, dict] = await Promise.all([
     fetchRawTxt(d.title),
     readWorkFile(store.octokitWrapper, d.proofreadPath),
     fetchNameDict(),
   ])
-  if (rawTxt === null || csvText === null) {
-    alert('纯中文TXT生成失败：原始TXT或校对CSV不存在')
-    return
+  if (rawTxt === null || csvText === null) return null
+  const { data } = extractInfoFromCsvText(csvText)
+  return {
+    blob: new Blob([buildChineseTxt(rawTxt, data, dict)], {
+      type: 'text/plain;charset=utf-8',
+    }),
+    name: `${d.title}.txt`,
   }
+}
+
+async function downloadCsv(d: DocTask) {
+  const b = await csvBlob(d)
+  if (!b) return void alert('校对CSV下载失败：文件不存在或无权限')
+  FileSaver.saveAs(b.blob, b.name)
+}
+
+async function downloadChineseTxt(d: DocTask) {
   try {
-    const { data } = extractInfoFromCsvText(csvText)
-    const merged = buildChineseTxt(rawTxt, data, dict)
-    FileSaver.saveAs(
-      new Blob([merged], { type: 'text/plain;charset=utf-8' }),
-      `${d.title}.txt`
-    )
+    const b = await txtBlob(d)
+    if (!b) return void alert('纯中文TXT生成失败：原始TXT或校对CSV不存在')
+    FileSaver.saveAs(b.blob, b.name)
   } catch (e: any) {
     alert(`纯中文TXT生成失败：${e?.message || e}`)
   }
+}
+
+// 批量下载勾选文件的校对 CSV 或纯中文 TXT。逐个 saveAs（不引入打包依赖），
+// 每次间隔一点避免浏览器丢掉连续下载；失败的汇总提示，不中断其余。
+async function batchDownload(kind: 'csv' | 'txt') {
+  const picked = rows.value.filter((d) => selected.value.has(d.number))
+  if (!picked.length || batching.value) return
+  batching.value = true
+  const fails: string[] = []
+  try {
+    for (const d of picked) {
+      try {
+        const b = kind === 'csv' ? await csvBlob(d) : await txtBlob(d)
+        if (!b) {
+          fails.push(d.title)
+          continue
+        }
+        FileSaver.saveAs(b.blob, b.name)
+        await new Promise((r) => setTimeout(r, 150))
+      } catch {
+        fails.push(d.title)
+      }
+    }
+  } finally {
+    batching.value = false
+  }
+  if (fails.length)
+    alert(
+      `${picked.length - fails.length}/${picked.length} 已下载。失败 ${
+        fails.length
+      } 个：\n${fails.slice(0, 10).join('\n')}${fails.length > 10 ? '\n…' : ''}`
+    )
 }
 
 watch(
@@ -198,11 +306,26 @@ export default {
 }
 .row {
   display: grid;
-  grid-template-columns: 112px minmax(196px, 1fr) 190px 190px repeat(4, 82px);
+  grid-template-columns: 28px 112px minmax(196px, 1fr) 190px 190px repeat(4, 82px);
   gap: 10px;
   align-items: center;
   padding: 10px 0;
   border-bottom: 1px solid #e2e8f0;
+}
+.batchbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+.sel-count {
+  color: #64748b;
+  font-size: 12px;
+}
+.rowcheck {
+  justify-self: center;
 }
 .title {
   min-width: 0;
@@ -236,10 +359,14 @@ export default {
     margin-bottom: 10px;
   }
 
+  .rowcheck,
   .source-time,
   .title,
   .user {
     grid-column: 1 / -1;
+  }
+  .rowcheck {
+    justify-self: start;
   }
 
   .title {
