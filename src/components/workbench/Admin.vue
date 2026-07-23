@@ -60,6 +60,32 @@
         </n-button>
       </div>
 
+      <h3>批量上传替换校对稿</h3>
+      <div class="upload">
+        <input type="file" accept=".csv" multiple @change="onReplaceFiles" />
+        <n-button
+          size="small"
+          type="primary"
+          :disabled="!replaceMatched.length"
+          :loading="replacing"
+          @click="doReplace"
+        >
+          替换 {{ replaceMatched.length }} 个校对稿
+        </n-button>
+      </div>
+      <p v-if="replaceFiles.length" class="replace-preview">
+        <span class="ok">匹配 {{ replaceMatched.length }} 个</span>
+        <span v-if="replaceUnmatched.length" class="warn">
+          · 未匹配 {{ replaceUnmatched.length }}：{{
+            replaceUnmatched.join('、')
+          }}</span
+        >
+        <span class="tip"
+          >· 按文件名匹配现有工单（去掉 <code>_校对</code> 与
+          <code>.csv</code>）；旧稿转备份、版本+1、记录与校对 TXT 同步更新。</span
+        >
+      </p>
+
       <n-modal
         v-model:show="showUsers"
         preset="card"
@@ -618,14 +644,10 @@ async function uploadDoc() {
   }
   uploading.value = true
   try {
-    const text = await uploadFile.value.text()
-    const bytes = new TextEncoder().encode(text)
-    let bin = ''
-    bytes.forEach((b) => (bin += String.fromCharCode(b)))
     await pushContentToWorkPath(
       store.octokitWrapper,
       stagePathForTitle(title, uploadStage.value),
-      btoa(bin),
+      await fileToB64(uploadFile.value),
       `上传 ${title}`
     )
     await createWorkIssue(
@@ -641,6 +663,90 @@ async function uploadDoc() {
     alert(`上传失败：${e?.message || e}`)
   }
   uploading.value = false
+}
+
+// CSV 文件 → base64（UTF-8）
+async function fileToB64(file: File): Promise<string> {
+  const bytes = new TextEncoder().encode(await file.text())
+  let bin = ''
+  bytes.forEach((b) => (bin += String.fromCharCode(b)))
+  return btoa(bin)
+}
+
+// ==== 批量上传替换现有校对稿 ====
+// 按文件名匹配现有工单（去 _校对 / .csv），逐个走 completeStage 替换：
+// 旧稿转备份、revision+1、记录与校对 TXT 同步。校对者沿用原认领人，管理员只做修订。
+const replaceFiles = ref<{ title: string; file: File; matched: boolean }[]>([])
+const replacing = ref(false)
+
+function fileIdFromName(name: string): string {
+  return name
+    .replace(/\.csv$/i, '')
+    .replace(/_校对$/, '')
+    .trim()
+}
+function onReplaceFiles(e: Event) {
+  const picked = Array.from((e.target as HTMLInputElement).files || [])
+  const titles = new Set(docs.value.map((d) => d.title))
+  replaceFiles.value = picked.map((file) => {
+    const title = fileIdFromName(file.name)
+    return { title, file, matched: titles.has(title) }
+  })
+}
+const replaceMatched = computed(() =>
+  replaceFiles.value.filter((r) => r.matched)
+)
+const replaceUnmatched = computed(() =>
+  replaceFiles.value.filter((r) => !r.matched).map((r) => r.file.name)
+)
+
+async function doReplace() {
+  if (!store.octokitWrapper || replacing.value) return
+  const matched = replaceMatched.value
+  if (!matched.length) return
+  if (
+    !confirm(
+      `将用上传内容替换 ${matched.length} 个校对稿（旧稿转备份、版本+1、` +
+        `记录与校对 TXT 同步）。校对者沿用原认领人。继续？`
+    )
+  )
+    return
+  replacing.value = true
+  const byTitle = new Map(docs.value.map((d) => [d.title, d]))
+  const fails: string[] = []
+  try {
+    for (const r of matched) {
+      const d = byTitle.get(r.title)
+      if (!d) {
+        fails.push(r.title)
+        continue
+      }
+      try {
+        await completeStage(store.octokitWrapper, {
+          fileId: d.title,
+          role: 'pr',
+          sourcePath: d.proofreadPath || stagePathForTitle(d.title, 'proofread'),
+          contentB64: await fileToB64(r.file),
+          operatorGithub: canonicalOperator(d.pr.user) || me.value,
+          translatorDisplay: displayUser(d.tr.user),
+          baseRevision: -1,
+        })
+      } catch {
+        fails.push(r.title)
+      }
+    }
+  } finally {
+    replacing.value = false
+  }
+  replaceFiles.value = []
+  await refresh()
+  alert(
+    fails.length
+      ? `${matched.length - fails.length}/${matched.length} 已替换。失败 ${
+          fails.length
+        } 个：\n${fails.slice(0, 10).join('\n')}`
+      : `已替换 ${matched.length} 个校对稿`
+  )
 }
 
 async function archive(d: DocTask) {
@@ -765,6 +871,20 @@ h3 {
 }
 .upload {
   margin-bottom: 10px;
+}
+.replace-preview {
+  font-size: 12px;
+  margin: -2px 0 12px;
+  line-height: 1.6;
+}
+.replace-preview .ok {
+  color: #16a34a;
+}
+.replace-preview .warn {
+  color: #ea580c;
+}
+.replace-preview .tip {
+  color: #64748b;
 }
 .upload .n-input {
   max-width: 320px;
