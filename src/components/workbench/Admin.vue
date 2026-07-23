@@ -305,9 +305,11 @@ import {
 import {
   WORK_OWNER,
   WORK_REPO,
+  WORK_BRANCH,
   STATES,
   archiveIssue,
   canonicalOperator,
+  completeStage,
   createWorkIssue,
   docFromIssue,
   fillDocSourceCommitTimes,
@@ -500,18 +502,52 @@ async function saveUserRows() {
   savingUsers.value = false
 }
 
+async function workFileExists(w: any, path: string): Promise<boolean> {
+  try {
+    await w.getContent(WORK_OWNER, WORK_REPO, WORK_BRANCH, path, true)
+    return true
+  } catch (e: any) {
+    if (e?.response?.status === 404) return false
+    throw e
+  }
+}
+
+// 保存一条工序状态到 Issue + 记录。把校对置「完成」但仓库还没有校对稿时，用翻译稿
+// 正式生成一份（校对稿 + 校对 TXT + 记录一次提交），而不是只翻状态位——否则会造出
+// 「完成却无成品」（下载 CSV/TXT 为空、Bot 也同步不到，正是之前 9 篇 pstory 的成因）。
+async function persistDoc(w: any, d: DocTask) {
+  await updateTracks(w, d.number, d.tr, d.pr, displayUser(d.tr.user))
+  if (d.pr.state === '完成' && !(await workFileExists(w, d.proofreadPath))) {
+    let src: { content: string }
+    try {
+      src = await w.getContent(
+        WORK_OWNER,
+        WORK_REPO,
+        WORK_BRANCH,
+        d.translatedPath,
+        true
+      )
+    } catch {
+      throw new Error(`${d.title}：没有翻译稿，无法生成校对稿；请先完成翻译`)
+    }
+    await completeStage(w, {
+      fileId: d.title,
+      role: 'pr',
+      sourcePath: d.translatedPath,
+      contentB64: src.content,
+      operatorGithub: canonicalOperator(d.pr.user),
+      translatorDisplay: displayUser(d.tr.user),
+      baseRevision: -1,
+    })
+  }
+  await syncRecordTracks(w, d.title, d.tr, d.pr)
+}
+
 async function saveDoc(d: DocTask) {
   if (!store.octokitWrapper) return
   busy.value = d.number
   try {
-    await updateTracks(
-      store.octokitWrapper,
-      d.number,
-      d.tr,
-      d.pr,
-      displayUser(d.tr.user)
-    )
-    await syncRecordTracks(store.octokitWrapper, d.title, d.tr, d.pr)
+    await persistDoc(store.octokitWrapper, d)
     await refresh()
   } catch (e: any) {
     alert(`保存状态失败：${e?.message || e}`)
@@ -557,16 +593,7 @@ async function batchSave() {
   if (!picked.length) return
   batchSaving.value = true
   try {
-    for (const d of picked) {
-      await updateTracks(
-        store.octokitWrapper,
-        d.number,
-        d.tr,
-        d.pr,
-        displayUser(d.tr.user)
-      )
-      await syncRecordTracks(store.octokitWrapper, d.title, d.tr, d.pr)
-    }
+    for (const d of picked) await persistDoc(store.octokitWrapper, d)
     await refresh()
   } catch (e: any) {
     alert(`批量保存失败：${e?.message || e}`)

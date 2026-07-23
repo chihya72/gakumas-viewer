@@ -860,7 +860,7 @@ export async function syncRecordTracks(
     if (error?.response?.status === 404) return false
     throw error
   }
-  const now = new Date().toISOString()
+  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
   let changed = false
   for (const [key, track] of [
     ['translation', tr],

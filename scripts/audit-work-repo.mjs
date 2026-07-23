@@ -7,11 +7,17 @@ import { createHash } from 'node:crypto'
 
 const REPO = process.env.WORK_REPO || 'chihya72/gakumas-translation-work'
 const BRANCH = process.env.WORK_BRANCH || 'main'
-const RAW = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/`
 
 const gh = (args) =>
   execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 1 << 28 })
 const api = (path) => JSON.parse(gh(['api', path]))
+// 记录读取走带鉴权的 API（application/vnd.github.raw）而非 raw CDN——raw 无视查询串、
+// 会回缓存旧版本，写完立刻体检会误报（不变量 #4）。API 直读保证读到的是当前真值。
+const TOKEN = gh(['auth', 'token']).trim()
+const readRecordJson = (title) =>
+  fetch(`https://api.github.com/repos/${REPO}/contents/records/${title}.json`, {
+    headers: { Authorization: `token ${TOKEN}`, Accept: 'application/vnd.github.raw' },
+  })
 
 const TR = /<!--\s*tr:([^:>]*):([^>]*?)-->/
 const PR = /<!--\s*pr:([^:>]*):([^>]*?)-->/
@@ -109,7 +115,7 @@ for (let i = 0; i < issues.length; i += 25) {
 
       if (!sourceTimes[title]) add('入库时间清单缺项', title)
 
-      const res = await fetch(`${RAW}records/${title}.json?v=${Date.now()}`)
+      const res = await readRecordJson(title)
       if (!res.ok) return add('缺记录', title)
       const rec = await res.json()
 
