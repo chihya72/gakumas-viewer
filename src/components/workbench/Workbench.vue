@@ -384,11 +384,11 @@ function trackLabel(t: DocTask['tr']) {
 }
 
 function showTrStatus(d: DocTask) {
-  return !isMine(d) || d.tr.state === '待认领'
+  return !sameWorkUser(d.tr.user, me.value) || d.tr.state === '待认领'
 }
 
 function showTrDownload(d: DocTask) {
-  return isMine(d) && d.tr.state !== '待认领'
+  return sameWorkUser(d.tr.user, me.value) && d.tr.state !== '待认领'
 }
 
 // 校对列显示文案：未认领始终"待认领"；已认领但翻译未完成显示"待校对"
@@ -400,7 +400,11 @@ function prCellLabel(d: DocTask) {
 }
 
 function showPrStatus(d: DocTask) {
-  return !isMine(d) || d.pr.state === '待认领' || d.tr.state !== '完成'
+  return (
+    !sameWorkUser(d.pr.user, me.value) ||
+    d.pr.state === '待认领' ||
+    d.tr.state !== '完成'
+  )
 }
 
 async function refresh(includeTimes = false) {
