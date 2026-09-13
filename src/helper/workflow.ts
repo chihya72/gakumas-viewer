@@ -1168,14 +1168,17 @@ export function buildChineseTxt(
         `$1${row.trans.replace(/\$/g, '$$$$')}`
       )
     }
-    // 人名替换（精确匹配字典键）
-    if (row.name && nameDict[row.name] && nameDict[row.name] !== row.name) {
-      content = content.replace(
-        new RegExp(`(name=)${escapeRe(row.name)}`, 'g'),
-        `$1${nameDict[row.name].replace(/\$/g, '$$$$')}`
-      )
-    }
   }
+  // 完整读取 name 属性后一次查表，不依赖 CSV 行顺序，也不重复翻译替换结果。
+  content = content.replace(
+    /(^|\s)(name=[ \t]*)([^\s\]]+)/g,
+    (_match, space: string, prefix: string, name: string) => {
+      const translated = Object.prototype.hasOwnProperty.call(nameDict, name)
+        ? nameDict[name]
+        : name
+      return space + prefix + (translated || name)
+    }
+  )
   const textErrors = validateTextHtmlTags(rawTxt, content)
   if (textErrors.length) throw new Error(textErrors.join('\n'))
   return content

@@ -1,6 +1,7 @@
 // completeStage 实跑检查：假 wrapper 记录提交了哪些文件，不碰网络。
 // 跑法：npm run check:stage
 import {
+  buildChineseTxt,
   canonicalOperator,
   completeStage,
   draftInfoOf,
@@ -402,6 +403,66 @@ const check = (name, cond, extra = '') => {
     '别人的进行中轨道不可编辑',
     myStatusOf(tr, pr, 'someone-else').activeRole === null
   )
+}
+
+// 下载 TXT：短名称不能先改坏长名称，属性只能完整匹配且一次替换。
+{
+  const rows = [
+    {
+      id: '0000000000000',
+      name: 'ことね',
+      text: '長い長い台詞',
+      trans: '较长台词',
+    },
+    {
+      id: '0000000000000',
+      name: 'ことねの脳内イメージ',
+      text: '短い',
+      trans: '短句',
+    },
+  ]
+  const raw = [
+    '[message text=長い長い台詞 name=ことね]',
+    '[message text=短い name=ことねの脳内イメージ]',
+    '[message text=短い name=ことねの脳内イメージ]',
+    '[message text=<em>ことね</em> name= ことね speaker=x]',
+    '[message text=x name=ことね？ rename=ことね]',
+    '[message text=x name={user}]',
+    '[message text=x name=constructor]',
+    '[message text=x name=A.+]',
+    '[message text=x name=琴音]',
+  ].join('\r\n')
+  const dict = {
+    ことね: '琴音',
+    ことねの脳内イメージ: '琴音的脑补',
+    琴音: '另一名字',
+    'A.+': '$1\\名字',
+  }
+  const expected = [
+    '[message text=较长台词 name=琴音]',
+    '[message text=短句 name=琴音的脑补]',
+    '[message text=短句 name=琴音的脑补]',
+    '[message text=<em>ことね</em> name= 琴音 speaker=x]',
+    '[message text=x name=ことね？ rename=ことね]',
+    '[message text=x name={user}]',
+    '[message text=x name=constructor]',
+    '[message text=x name=$1\\名字]',
+    '[message text=x name=另一名字]',
+  ].join('\r\n')
+  check(
+    'TXT 完整人名一次替换，保留标签、未知名称和属性边界',
+    buildChineseTxt(raw, rows, dict) === expected
+  )
+  check(
+    'TXT 人名替换不依赖 CSV 顺序',
+    buildChineseTxt(raw, [...rows].reverse(), dict) === expected
+  )
+  check(
+    'TXT 人名替换不依赖译文行是否存在',
+    buildChineseTxt(raw, [], dict) ===
+      expected.replace('较长台词', '長い長い台詞').replaceAll('短句', '短い')
+  )
+  check('TXT 空字典保持原文', buildChineseTxt(raw, [], {}) === raw)
 }
 
 console.log(fail ? `\n${fail} 个用例失败` : '\n全部通过')
