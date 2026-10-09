@@ -12,6 +12,8 @@ export interface HomeVoice {
   asr_review?: string[]
   ja_origin?: string
   zh_origin?: string
+  reviewed?: boolean
+  reviewed_at?: string
   [key: string]: unknown
 }
 export interface VoiceEdit {
@@ -23,26 +25,17 @@ export interface VoiceEdit {
   reviewed?: boolean
 }
 export type VoiceEdits = Record<string, VoiceEdit>
-export interface VoiceDirectory {
-  name: string
-  getDirectoryHandle(name: string): Promise<VoiceDirectory>
-  getFileHandle(name: string): Promise<{
-    getFile(): Promise<File>
-    createWritable(): Promise<{ write(text: string): Promise<void>; close(): Promise<void> }>
-  }>
-}
 export interface VoiceSource {
   label: string
   key: string
   load(): Promise<HomeVoice[]>
   audio(row: HomeVoice): Promise<ArrayBuffer>
   ui(): Promise<Record<string, unknown>>
-  directory?: VoiceDirectory
   github?: { owner: string; repo: string; branch: string }
 }
 
 export function parseVoices(value: unknown): HomeVoice[] {
-  if (!Array.isArray(value)) throw new Error('请选择本项目的 data/voices.json')
+  if (!Array.isArray(value)) throw new Error('仓库的 data/voices.json 不是有效语音总表')
   const ids = new Set<string>()
   for (const row of value) {
     if (!row || typeof row.voiceAssetId !== 'string' || ids.has(row.voiceAssetId) ||
@@ -62,23 +55,22 @@ export function safeAcbPath(path: string): string {
   return normalized
 }
 
-async function fileHandle(root: VoiceDirectory, path: string) {
-  const parts = path.replace(/\\/g, '/').split('/')
-  let directory = root
-  for (const part of parts.slice(0, -1)) directory = await directory.getDirectoryHandle(part)
-  return directory.getFileHandle(parts[parts.length - 1])
+export function homeVoiceStatus(row: HomeVoice): 'ai_review' | 'pending' | 'reviewed' {
+  if (row.reviewed) return 'reviewed'
+  if (!row.ja.trim() || row.asr_error || row.asr_review?.length) return 'ai_review'
+  return 'pending'
 }
 
-export function localVoiceSource(directory: VoiceDirectory): VoiceSource {
-  async function json(path: string) {
-    return JSON.parse(await (await (await fileHandle(directory, path)).getFile()).text())
-  }
-  return {
-    directory, label: `本地 · ${directory.name}`, key: `local:${directory.name}`,
-    load: async () => parseVoices(await json('data/voices.json')),
-    ui: async () => json('data/subtitle_ui.json'),
-    audio: async (row) => (await (await fileHandle(directory, safeAcbPath(row.acb))).getFile()).arrayBuffer(),
-  }
+export function escapeVoiceNewlines(text: string): string {
+  return text.replace(/\r\n?/g, '\n').replace(/\n/g, '\\n')
+}
+
+export function completedVoiceEdit(row: HomeVoice, edit?: VoiceEdit): VoiceEdit {
+  const current = edit || { baseJa: row.ja, baseZh: row.zh, ja: row.ja, zh: row.zh }
+  if (!current.ja.trim()) throw new Error('请填写日语原文后完成校对')
+  if (!current.zh.trim()) throw new Error('请填写中文译文后完成校对')
+  // Completing review approves both displayed texts, including unchanged Chinese.
+  return { ...current, keepChinese: true, reviewed: true }
 }
 
 export function remoteVoiceSource(owner: string, repo: string, branch: string): VoiceSource {
@@ -134,7 +126,7 @@ export function mergeVoiceEdits(latest: HomeVoice[], edits: VoiceEdits): HomeVoi
     const edit = edits[row.voiceAssetId]
     if (!edit) return row
     if (row.ja !== edit.baseJa || row.zh !== edit.baseZh) {
-      throw new Error(`这条语音已被其他操作修改：${row.voiceAssetId}。请导出草稿后重新加载并合并。`)
+      throw new Error(`这条语音已被其他操作修改：${row.voiceAssetId}。草稿已保留，请复制修改内容，刷新后对照最新原稿合并。`)
     }
     if (!edit.ja.trim()) throw new Error(`日语原文不能为空：${row.voiceAssetId}`)
     return previewEdit(row, edit)
@@ -142,10 +134,9 @@ export function mergeVoiceEdits(latest: HomeVoice[], edits: VoiceEdits): HomeVoi
 }
 
 export function bilingualCsv(rows: HomeVoice[]): string {
-  const escaped = (text: string) => text.replace(/\r\n?/g, '\n').replace(/\n/g, '\\n')
   return '\uFEFF' + Papa.unparse({
     fields: ['voiceAssetId', 'speaker', 'ja', 'zh'],
-    data: rows.map((row) => [row.voiceAssetId, row.speaker, escaped(row.ja), escaped(row.zh)]),
+    data: rows.map((row) => [row.voiceAssetId, row.speaker, escapeVoiceNewlines(row.ja), escapeVoiceNewlines(row.zh)]),
   }) + '\r\n'
 }
 
@@ -163,19 +154,6 @@ export function voiceTextFiles(rows: HomeVoice[], ui: Record<string, unknown>) {
     }) })
   }
   return files
-}
-
-export async function saveLocalVoices(source: VoiceSource, edits: VoiceEdits) {
-  if (!source.directory) throw new Error('未打开本地项目目录')
-  const rows = mergeVoiceEdits(await source.load(), edits)
-  const files = voiceTextFiles(rows, await source.ui())
-  // Resolve every existing target first; never create project folders or write audio.
-  const handles = await Promise.all(files.map((file) => fileHandle(source.directory!, file.path)))
-  for (let index = 0; index < files.length; index++) {
-    const stream = await handles[index].createWritable()
-    try { await stream.write(files[index].content) } finally { await stream.close() }
-  }
-  return rows
 }
 
 function encodeUtf8(text: string) {
@@ -227,25 +205,4 @@ export async function saveGithubVoices(source: VoiceSource, edits: VoiceEdits, w
     ...target, ref: `heads/${target.branch}`, sha: newCommit.sha, force: false, headers,
   })
   return { rows, url: `https://github.com/${target.owner}/${target.repo}/commit/${newCommit.sha}` }
-}
-
-export function importVoiceCsv(text: string, rows: HomeVoice[]): VoiceEdits {
-  const parsed = Papa.parse<Record<string, string>>(text.replace(/^\uFEFF/, ''), { header: true, skipEmptyLines: true })
-  if (parsed.errors.length || !['voiceAssetId', 'ja', 'zh'].every((field) => parsed.meta.fields?.includes(field))) {
-    throw new Error('CSV 需要 voiceAssetId、ja、zh 列，且每条语音占一行')
-  }
-  const byId = new Map(rows.map((row) => [row.voiceAssetId, row]))
-  const edits: VoiceEdits = {}
-  const seen = new Set<string>()
-  for (const item of parsed.data) {
-    const row = byId.get(item.voiceAssetId)
-    if (!row || seen.has(item.voiceAssetId) || !item.ja?.trim() || item.zh === undefined) {
-      throw new Error(`CSV 有未知 ID、重复 ID 或空日文：${item.voiceAssetId}`)
-    }
-    seen.add(item.voiceAssetId)
-    const ja = item.ja.replace(/\\n/g, '\n')
-    const zh = item.zh.replace(/\\n/g, '\n')
-    if (ja !== row.ja || zh !== row.zh) edits[row.voiceAssetId] = { baseJa: row.ja, baseZh: row.zh, ja, zh }
-  }
-  return edits
 }
