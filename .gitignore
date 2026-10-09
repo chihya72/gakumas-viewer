@@ -35,3 +35,6 @@ pr
 
 # 其他工具留下的附件缓存
 .codex-remote-attachments/
+
+# Audio is decoded from ACB in browser memory; WAV is never published.
+*.wav

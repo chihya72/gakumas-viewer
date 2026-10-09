@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import vue from '@vitejs/plugin-vue'
+import fs from 'node:fs'
+import path from 'node:path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -8,6 +10,30 @@ export default defineConfig({
   base: process.env.PAGES_BASE || '/',
   plugins: [
     vue(),
+    {
+      name: 'home-voice-local-data',
+      apply: 'serve',
+      configureServer(server) {
+        // Read-only development access to the existing sibling project. No WAV endpoint.
+        const root = process.env.HOME_VOICE_PROJECT || path.resolve(process.cwd(), '..', 'Gakumas-Home-Voice-Translate')
+        server.middlewares.use('/home-voice-local', (req, res, next) => {
+          const relative = (req.url || '').split('?')[0].replace(/^\//, '')
+          if (!['data/voices.json', 'data/subtitle_ui.json'].includes(relative) &&
+              !/^audio\/acb\/sud_vo_[a-zA-Z0-9_-]+\.acb$/.test(relative)) {
+            res.statusCode = 404; res.end('Not found'); return
+          }
+          if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; res.end(); return }
+          const target = path.join(root, relative)
+          if (!fs.existsSync(target)) { res.statusCode = 404; res.end('Not found'); return }
+          res.setHeader('Content-Type', relative.endsWith('.json') ? 'application/json' : 'application/octet-stream')
+          res.setHeader('Cache-Control', 'no-store')
+          if (req.method === 'HEAD') { res.end(); return }
+          const stream = fs.createReadStream(target)
+          stream.on('error', next)
+          stream.pipe(res)
+        })
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: {
@@ -37,6 +63,7 @@ export default defineConfig({
         // },
       },
       workbox: {
+        globIgnores: ['**/vgmstream-cli.wasm', '**/vgmstream-cli.js', '**/home-voice-worker.js'],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => {

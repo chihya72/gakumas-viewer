@@ -2,6 +2,8 @@
 
 [用户手册](https://docs.sc-viewer.top)
 
+[主页语音播放与日中校对](docs/home-voice.md)：页面内使用 vgmstream WebAssembly 按需解析 ACB，支持本地项目和 GitHub 文本保存，不发布 WAV。
+
 - [sc-viewer](https://sc-viewer.top): deployed instance
 - [User Script](https://static.sc-viewer.top/viewer-button.user.js): userscript to redirect user from github csv page to [sc-viewer](https://sc-viewer.top) page
 
