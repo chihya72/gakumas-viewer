@@ -33,10 +33,15 @@ assert.throws(() => api.completedVoiceEdit(row, { ...edit, zh: '' }), /中文译
 const csv = api.bilingualCsv([row])
 assert.equal(csv.trimEnd().split(/\r?\n/).length, 2)
 assert.ok(csv.includes('一行目\\n二行目'))
-const files = api.voiceTextFiles([row], { enabled: true })
+const ui = { enabled: true, screenRect: [0.61, 0.687, 0.38, 0.094], fontSize: 32, textPadding: [64, 64] }
+const files = api.voiceTextFiles([row], ui)
 assert.equal(files.length, 4)
 assert.ok(files.every((file) => !/\.(wav|acb)$/.test(file.path)))
 assert.equal(JSON.parse(files[3].content).subtitles[0].text, row.zh)
+assert.deepEqual(JSON.parse(files[3].content).screenRect, [0.60, 0.686, 0.38, 0.094])
+assert.equal(JSON.parse(files[3].content).fontSize, ui.fontSize)
+assert.deepEqual(JSON.parse(files[3].content).textPadding, ui.textPadding)
+assert.deepEqual(ui.screenRect, [0.61, 0.687, 0.38, 0.094])
 assert.equal(api.voiceTextFiles([{ ...row, zh: '' }], {}).length, 3)
 
 // Simulate a concurrent edit to another ID: retain it while saving our selected ID.
@@ -50,7 +55,7 @@ const wrapper = { userMeta: { username: 'tester' }, headers: {}, request: async 
   if (endpoint.startsWith('GET') && endpoint.includes('git/commits')) return { data: { tree: { sha: 'base-tree' } } }
   if (endpoint.includes('/contents/')) {
     assert.equal(args.ref, 'head')
-    return { data: { encoding: 'base64', content: b64(args.path.endsWith('voices.json') ? [row, other] : { enabled: true }) } }
+    return { data: { encoding: 'base64', content: b64(args.path.endsWith('voices.json') ? [row, other] : ui) } }
   }
   return { data: { sha: 'new' } }
 } }
@@ -71,6 +76,8 @@ assert.equal(update.args.force, false)
 assert.deepEqual(requests.find((r) => r.endpoint.startsWith('POST') && r.endpoint.endsWith('/git/commits')).args.parents, ['head'])
 const voicesBlob = requests.find((r) => r.endpoint.startsWith('POST') && r.endpoint.endsWith('/git/blobs'))
 assert.deepEqual(JSON.parse(Buffer.from(voicesBlob.args.content, 'base64').toString()), result.rows)
+const subtitleBlob = requests.filter((r) => r.endpoint.startsWith('POST') && r.endpoint.endsWith('/git/blobs')).at(-1)
+assert.deepEqual(JSON.parse(Buffer.from(subtitleBlob.args.content, 'base64').toString()).screenRect, [0.60, 0.686, 0.38, 0.094])
 requests.length = 0
 const reviewedWithoutChanges = await api.saveGithubVoices(githubSource, { [id]: unchangedReview }, wrapper)
 assert.equal(reviewedWithoutChanges.rows[0].reviewed, true)

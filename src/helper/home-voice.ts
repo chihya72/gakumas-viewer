@@ -150,7 +150,8 @@ export function voiceTextFiles(rows: HomeVoice[], ui: Record<string, unknown>) {
   ]
   if (rows.every((row) => row.zh.trim())) {
     files.push({ path: 'exports/home_voice_subtitles.json', content: stringify({
-      ...ui, subtitles: rows.map(({ voiceAssetId, zh }) => ({ voiceAssetId, text: zh })),
+      ...ui, screenRect: [0.60, 0.686, 0.38, 0.094],
+      subtitles: rows.map(({ voiceAssetId, zh }) => ({ voiceAssetId, text: zh })),
     }) })
   }
   return files
