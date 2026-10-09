@@ -216,19 +216,20 @@ summary { cursor: pointer; min-height: 44px; line-height: 44px; }
 .error, .notice { padding: 12px; border-radius: 6px; overflow-wrap: anywhere; }
 .error { color: #991b1b; background: #fef2f2; }
 .notice { color: #075985; background: #f0f9ff; }
-.workspace { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 16px; }
-.voice-list, .editor { background: #fff; border: 1px solid var(--voice-border); border-radius: 8px; }
+.workspace { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: stretch; margin-top: 16px; }
+.voice-list, .editor { min-width: 0; box-sizing: border-box; background: #fff; border: 1px solid var(--voice-border); border-radius: 8px; }
+.voice-list { display: flex; flex-direction: column; }
 .filters { display: grid; gap: 12px; padding: 16px; border-bottom: 1px solid var(--voice-border); }
 .filter-row label { flex: 1; min-width: 0; }
-.list-items { max-height: 590px; overflow-y: auto; }
-.list-items button { display: grid; gap: 6px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid #e2e8f0; border-radius: 0; padding: 12px 16px; }
+.list-items { max-height: 590px; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+.list-items button { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; width: 100%; min-width: 0; box-sizing: border-box; margin: 0; text-align: left; border: 0; border-bottom: 1px solid #e2e8f0; border-radius: 0; padding: 12px 16px; }
 .list-items button.active { background: #e0f2fe; box-shadow: inset 3px 0 var(--voice-primary); }
 .row-heading { font-weight: 600; }
 .row-heading small { margin-left: 8px; font-weight: 400; color: var(--voice-primary); }
 .voice-id { font-family: monospace; font-size: 12px; overflow-wrap: anywhere; color: var(--voice-muted); }
-.preview { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pagination { padding: 12px; justify-content: space-between; font-size: 13px; }
-.editor { padding: 20px; }
+.preview { min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pagination { margin-top: auto; padding: 12px; justify-content: space-between; font-size: 13px; }
+.editor { display: flex; flex-direction: column; padding: 20px; }
 .editor-title { justify-content: space-between; }
 h2 { margin: 0; font-size: 22px; }
 h2 span { font-size: 14px; font-weight: 400; color: var(--voice-muted); }
@@ -237,8 +238,9 @@ h2 span { font-size: 14px; font-weight: 400; color: var(--voice-muted); }
 audio { flex: 1; min-width: 200px; width: 100%; height: 44px; }
 .text-field { margin: 16px 0; font-weight: 600; }
 textarea { font-size: 16px; font-weight: 400; line-height: 1.75; resize: vertical; }
-.original p { white-space: pre-wrap; line-height: 1.75; }
-.actions { border-top: 1px solid var(--voice-border); padding-top: 16px; margin-top: 16px; }
+.original { margin-bottom: 16px; }
+.original p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; }
+.actions { border-top: 1px solid var(--voice-border); padding-top: 16px; margin-top: auto; }
 .empty { padding: 40px 24px; text-align: center; border: 1px dashed var(--voice-border); border-radius: 8px; line-height: 1.8; }
 @media (max-width: 800px) { .workspace { grid-template-columns: 1fr; } .list-items { max-height: 260px; } .editor { padding: 16px; } label { font-size: 16px; } }
 </style>
