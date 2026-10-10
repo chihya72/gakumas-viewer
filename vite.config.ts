@@ -15,7 +15,7 @@ export default defineConfig({
       apply: 'serve',
       configureServer(server) {
         // Read-only development access to the existing sibling project. No WAV endpoint.
-        const root = process.env.HOME_VOICE_PROJECT || path.resolve(process.cwd(), '..', 'Gakumas-Home-Voice-Translate')
+        const root = process.env.HOME_VOICE_PROJECT || path.resolve(process.cwd(), '..', 'gakumas-translation-work', 'home-voice')
         server.middlewares.use('/home-voice-local', (req, res, next) => {
           const relative = (req.url || '').split('?')[0].replace(/^\//, '')
           if (!['data/voices.json', 'data/subtitle_ui.json'].includes(relative) &&

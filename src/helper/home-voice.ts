@@ -28,6 +28,7 @@ export type VoiceEdits = Record<string, VoiceEdit>
 export interface VoiceSource {
   label: string
   key: string
+  directory?: string
   load(): Promise<HomeVoice[]>
   audio(row: HomeVoice): Promise<ArrayBuffer>
   ui(): Promise<Record<string, unknown>>
@@ -73,23 +74,36 @@ export function completedVoiceEdit(row: HomeVoice, edit?: VoiceEdit): VoiceEdit 
   return { ...current, keepChinese: true, reviewed: true }
 }
 
-export function remoteVoiceSource(owner: string, repo: string, branch: string): VoiceSource {
+export function remoteVoiceSource(owner: string, repo: string, branch: string, directory = ''): VoiceSource {
   if (![owner, repo].every((part) => /^[\w.-]+$/.test(part)) || !branch.trim()) {
     throw new Error('请填写 GitHub 用户、仓库和分支')
   }
+  if (directory && !/^[\w-]+$/.test(directory)) throw new Error('无效语音项目目录')
   const base = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}`
+  const prefix = directory ? `${directory}/` : ''
   async function request(path: string) {
-    const response = await fetch(`${base}/${path}?_=${Date.now()}`, { cache: 'no-store' })
+    const response = await fetch(`${base}/${prefix}${path}?_=${Date.now()}`, { cache: 'no-store' })
     if (!response.ok) throw new Error(`读取失败（${response.status}）：${path}，请检查仓库是否已发布`)
     return response
   }
   return {
-    github: { owner, repo, branch }, key: `github:${owner}/${repo}/${branch}`,
+    directory, github: { owner, repo, branch }, key: `github:${owner}/${repo}/${branch}${directory ? '/' + directory : ''}`,
     label: `${owner}/${repo} @ ${branch}`,
     load: async () => parseVoices(await (await request('data/voices.json')).json()),
     ui: async () => (await request('data/subtitle_ui.json')).json(),
     audio: async (row) => (await request(safeAcbPath(row.acb))).arrayBuffer(),
   }
+}
+
+export function restoreVoiceDrafts(source: VoiceSource, storage: Pick<Storage, 'getItem' | 'setItem'>, previousSourceKey?: string): VoiceEdits {
+  const key = `home-voice-drafts:${source.key}`
+  const current = storage.getItem(key)
+  const previous = current === null && previousSourceKey ? storage.getItem(`home-voice-drafts:${previousSourceKey}`) : null
+  const text = current ?? previous ?? '{}'
+  const edits = JSON.parse(text)
+  // Copy once; an empty new cache must not bring completed legacy drafts back.
+  if (previous !== null) storage.setItem(key, text)
+  return edits
 }
 
 export function previewEdit(row: HomeVoice, edit?: VoiceEdit): HomeVoice {
@@ -166,6 +180,7 @@ function encodeUtf8(text: string) {
 export async function saveGithubVoices(source: VoiceSource, edits: VoiceEdits, wrapper: any) {
   if (!source.github || !wrapper?.userMeta) throw new Error('请先在 viewer 登录 GitHub')
   const target = source.github
+  const prefix = source.directory ? `${source.directory}/` : ''
   const headers = wrapper.headers
   const { data: ref } = await wrapper.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
     ...target, ref: `heads/${target.branch}`, _cb: Date.now(), headers,
@@ -176,7 +191,7 @@ export async function saveGithubVoices(source: VoiceSource, edits: VoiceEdits, w
   })
   async function json(path: string) {
     let { data } = await wrapper.request('GET /repos/{owner}/{repo}/contents/{path}', {
-      ...target, path, ref: head, headers,
+      ...target, path: prefix + path, ref: head, headers,
     })
     if (data.encoding !== 'base64') {
       const response = await wrapper.request('GET /repos/{owner}/{repo}/git/blobs/{file_sha}', {
@@ -194,7 +209,7 @@ export async function saveGithubVoices(source: VoiceSource, edits: VoiceEdits, w
     const { data } = await wrapper.request('POST /repos/{owner}/{repo}/git/blobs', {
       ...target, content: encodeUtf8(file.content), encoding: 'base64', headers,
     })
-    tree.push({ path: file.path, mode: '100644', type: 'blob', sha: data.sha })
+    tree.push({ path: prefix + file.path, mode: '100644', type: 'blob', sha: data.sha })
   }
   const { data: newTree } = await wrapper.request('POST /repos/{owner}/{repo}/git/trees', {
     ...target, base_tree: commit.tree.sha, tree, headers,

@@ -4,9 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import PushHeader from './translate/push/PushHeader.vue'
 import { store } from '../store'
 import { decodeHomeVoice } from '../helper/home-voice-player'
+import { WORK_OWNER, WORK_REPO, WORK_BRANCH } from '../helper/workflow'
 import {
   remoteVoiceSource, parseVoices, previewEdit, homeVoiceStatus, escapeVoiceNewlines,
-  completedVoiceEdit, saveGithubVoices,
+  completedVoiceEdit, saveGithubVoices, restoreVoiceDrafts,
   type HomeVoice, type VoiceEdits, type VoiceSource,
 } from '../helper/home-voice'
 
@@ -89,7 +90,9 @@ async function openSource(next: VoiceSource) {
     const loaded = await next.load()
     stopAudio()
     rows.value = loaded; source.value = next; page.value = 1
-    edits.value = JSON.parse(localStorage.getItem(`home-voice-drafts:${next.key}`) || '{}')
+    edits.value = restoreVoiceDrafts(next, localStorage,
+      next.directory === 'home-voice' && next.key.startsWith('github:')
+        ? 'github:chihya72/Gakumas-Home-Voice-Translate/main' : undefined)
     if (!loaded.some((row) => row.voiceAssetId === selectedId.value)) selectedId.value = loaded[0]?.voiceAssetId || ''
     notice.value = `已读取 ${loaded.length} 条语音；点击播放时解析 ACB。`
   } catch (e: any) { error.value = e.message || String(e) }
@@ -131,7 +134,7 @@ async function completeReview() {
   finally { busy.value = false }
 }
 onMounted(async () => {
-  const next = remoteVoiceSource('chihya72', 'Gakumas-Home-Voice-Translate', 'main')
+  const next = remoteVoiceSource(WORK_OWNER, WORK_REPO, WORK_BRANCH, 'home-voice')
   if (import.meta.env.DEV && import.meta.env.VITE_HOME_VOICE_LOCAL_PREVIEW === '1') {
     // Explicit development fixture only; published builds always use the fixed GitHub source.
     const base = '/home-voice-local/'
