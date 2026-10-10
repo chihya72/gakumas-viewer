@@ -34,13 +34,12 @@ const csv = api.bilingualCsv([row])
 assert.equal(csv.trimEnd().split(/\r?\n/).length, 2)
 assert.ok(csv.includes('一行目\\n二行目'))
 const ui = { enabled: true, screenRect: [0.61, 0.687, 0.38, 0.094], fontSize: 32, textPadding: [64, 64] }
+const subtitleUi = { enabled: true, showCueWhenMissing: false, leftOffset: 40, minBubbleWidth: 424, bubbleWidth: 520, fontSize: 32, textPadding: [40, 40] }
 const files = api.voiceTextFiles([row], ui)
 assert.equal(files.length, 4)
 assert.ok(files.every((file) => !/\.(wav|acb)$/.test(file.path)))
-assert.equal(JSON.parse(files[3].content).subtitles[0].text, row.zh)
-assert.deepEqual(JSON.parse(files[3].content).screenRect, [0.60, 0.686, 0.38, 0.094])
-assert.equal(JSON.parse(files[3].content).fontSize, ui.fontSize)
-assert.deepEqual(JSON.parse(files[3].content).textPadding, [48, 48])
+assert.deepEqual(JSON.parse(files[3].content), { ...subtitleUi, subtitles: [{ voiceAssetId: id, text: row.zh }] })
+assert.deepEqual(JSON.parse(api.voiceTextFiles([row], {})[3].content), { ...subtitleUi, subtitles: [{ voiceAssetId: id, text: row.zh }] })
 assert.deepEqual(ui.textPadding, [64, 64])
 assert.deepEqual(ui.screenRect, [0.61, 0.687, 0.38, 0.094])
 assert.equal(api.voiceTextFiles([{ ...row, zh: '' }], {}).length, 3)
@@ -121,8 +120,9 @@ assert.deepEqual(requests.find((r) => r.endpoint.startsWith('POST') && r.endpoin
 const voicesBlob = requests.find((r) => r.endpoint.startsWith('POST') && r.endpoint.endsWith('/git/blobs'))
 assert.deepEqual(JSON.parse(Buffer.from(voicesBlob.args.content, 'base64').toString()), result.rows)
 const subtitleBlob = requests.filter((r) => r.endpoint.startsWith('POST') && r.endpoint.endsWith('/git/blobs')).at(-1)
-assert.deepEqual(JSON.parse(Buffer.from(subtitleBlob.args.content, 'base64').toString()).screenRect, [0.60, 0.686, 0.38, 0.094])
-assert.deepEqual(JSON.parse(Buffer.from(subtitleBlob.args.content, 'base64').toString()).textPadding, [48, 48])
+assert.deepEqual(JSON.parse(Buffer.from(subtitleBlob.args.content, 'base64').toString()), {
+  ...subtitleUi, subtitles: result.rows.map(({ voiceAssetId, zh }) => ({ voiceAssetId, text: zh })),
+})
 requests.length = 0
 const reviewedWithoutChanges = await api.saveGithubVoices(githubSource, { [id]: unchangedReview }, wrapper)
 assert.equal(reviewedWithoutChanges.rows[0].reviewed, true)
