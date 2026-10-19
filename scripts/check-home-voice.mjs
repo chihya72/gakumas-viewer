@@ -34,7 +34,7 @@ const csv = api.bilingualCsv([row])
 assert.equal(csv.trimEnd().split(/\r?\n/).length, 2)
 assert.ok(csv.includes('一行目\\n二行目'))
 const ui = { enabled: true, screenRect: [0.61, 0.687, 0.38, 0.094], fontSize: 32, textPadding: [64, 64] }
-const subtitleUi = { enabled: true, showCueWhenMissing: false, leftOffset: 40, minBubbleWidth: 424, bubbleWidth: 520, fontSize: 32, textPadding: [40, 40] }
+const subtitleUi = { enabled: true, showCueWhenMissing: false, leftOffset: 40, minBubbleWidth: 296, bubbleWidth: 520, fontSize: 32, textPadding: [40, 40] }
 const files = api.voiceTextFiles([row], ui)
 assert.equal(files.length, 4)
 assert.ok(files.every((file) => !/\.(wav|acb)$/.test(file.path)))

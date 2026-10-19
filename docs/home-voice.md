@@ -18,7 +18,7 @@
 
 保存时读取当前分支的总表，保留其他语音的最新内容，把总表、日中 JSON/CSV 和完整中文 JSON 一次提交到工作仓库的原分支，每次“完成校对”生成一个 commit。所有变更位于 `home-voice/`，剧情文件保留在原提交树中。提交只包含文本。目标 ID 若已被其他操作改变，会保留草稿并提示合并；分支引用采用非强制更新。
 
-“完成校对”生成的正式字幕 JSON 使用新版气泡布局：`leftOffset: 40`、`minBubbleWidth: 424`、`bubbleWidth: 520`、`textPadding: [40, 40]`，不再输出 `screenRect` 或其他旧布局字段。`enabled`、`showCueWhenMissing`、`fontSize` 沿用仓库配置，缺失时分别默认为 `true`、`false`、`32`。
+“完成校对”生成的正式字幕 JSON 使用新版气泡布局：`leftOffset: 40`、`minBubbleWidth: 296`、`bubbleWidth: 520`、`textPadding: [40, 40]`，不再输出 `screenRect` 或其他旧布局字段。`enabled`、`showCueWhenMissing`、`fontSize` 沿用仓库配置，缺失时分别默认为 `true`、`false`、`32`。
 
 ## 草稿与换行
 
